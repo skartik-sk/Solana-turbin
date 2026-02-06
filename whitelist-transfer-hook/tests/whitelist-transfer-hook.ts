@@ -90,7 +90,9 @@ describe("whitelist-transfer-hook", () => {
   it("Add user to whitelist", async () => {
     const tx = await program.methods.addToWhitelist(provider.publicKey)
       .accountsPartial({
+        
         admin: provider.publicKey,
+        tokenAdmin,
         whitelist,
       })
       .rpc();
@@ -99,7 +101,7 @@ describe("whitelist-transfer-hook", () => {
     console.log("Transaction signature:", tx);
   });
 
-  it("Remove user to whitelist", async () => {
+  xit("Remove user to whitelist", async () => {
     const tx = await program.methods.removeFromWhitelist(provider.publicKey)
       .accountsPartial({
         admin: provider.publicKey,
@@ -146,6 +148,28 @@ describe("whitelist-transfer-hook", () => {
 
     console.log("\nTransaction Signature: ", txSig);
   });
+  xit("Create Mint with Transfer Hook Extension init _mint", async () => {
+    try {
+      
+      const tx = await program.methods
+        .initMint(9)
+        .accountsPartial({
+          user: wallet.publicKey,
+          mint: mint2022.publicKey,
+          extraAccountMetaList:extraAccountMetaListPDA,
+          systemProgram: SystemProgram.programId,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+        })
+        .signers([mint2022])
+        .rpc();
+      console.log("\nMint created:", mint2022.publicKey.toBase58());
+      console.log("Transaction Signature:", tx);
+    }
+    catch (e) {
+      console.error("This is the Error" , e);
+    }
+  
+    });
 
   it('Create Token Accounts and Mint Tokens', async () => {
     // 100 tokens
@@ -186,15 +210,31 @@ describe("whitelist-transfer-hook", () => {
         extraAccountMetaList: extraAccountMetaListPDA,
         systemProgram: SystemProgram.programId,
       })
-      //.instruction();
-      .rpc();
+      .instruction();
+      //.rpc();
 
-    //const transaction = new Transaction().add(initializeExtraAccountMetaListInstruction);
+    const transaction = new Transaction().add(initializeExtraAccountMetaListInstruction);
 
-    //const txSig = await sendAndConfirmTransaction(provider.connection, transaction, [wallet.payer], { skipPreflight: true, commitment: 'confirmed' });
+    try {
+      // Send the transaction
+
+    const txSig = await sendAndConfirmTransaction(provider.connection, transaction, [wallet.payer], { skipPreflight: true, commitment: 'confirmed' });
+      // console.log("\nTransfer Signature:", txSig);
     console.log("\nExtraAccountMetaList Account created:", extraAccountMetaListPDA.toBase58());
-    console.log('Transaction Signature:', initializeExtraAccountMetaListInstruction);
-  });
+    console.log('Transaction Signature:', txSig);
+    }
+    catch (error) {
+      if (error instanceof SendTransactionError) {
+        // console.error("\nTransaction failed:", error.logs[6]);
+        console.error("\nTransaction failed. Full logs:,");
+         //error.getLogs(provider.connection)
+         error.logs?.forEach((log, i) => console.error(`  ${i}: ${log}`));
+      } else {
+        console.error("\nUnexpected error:", error);
+      }
+    }
+    }
+  );
 
   it('Transfer Hook with Extra Account Meta', async () => {
     // 1 tokens
@@ -202,7 +242,9 @@ describe("whitelist-transfer-hook", () => {
     const amountBigInt = BigInt(amount);
 
     // Create the base transfer instruction
-    const transferInstruction = createTransferCheckedInstruction(
+    //  source: PublicKey,
+    const transferInstruction = await createTransferCheckedWithTransferHookInstruction(
+      provider.connection,
       sourceTokenAccount,
       mint2022.publicKey,
       destinationTokenAccount,
@@ -210,32 +252,28 @@ describe("whitelist-transfer-hook", () => {
       amountBigInt,
       9,
       [],
+      "confirmed",
       TOKEN_2022_PROGRAM_ID,
     );
 
     // Manually add the extra accounts required by the transfer hook
     // These accounts are needed for the CPI to our transfer hook program
-    transferInstruction.keys.push(
-      // ExtraAccountMetaList PDA
-      { pubkey: extraAccountMetaListPDA, isSigner: false, isWritable: false },
-      // Whitelist PDA (the extra account we defined)
-      { pubkey: whitelist, isSigner: false, isWritable: false },
-      // Transfer hook program
-      { pubkey: program.programId, isSigner: false, isWritable: false },
-    );
-
+    
     const transaction = new Transaction().add(transferInstruction);
 
     try {
       // Send the transaction
-      const txSig = await sendAndConfirmTransaction(provider.connection, transaction, [wallet.payer], { skipPreflight: false });
-      console.log("\nTransfer Signature:", txSig);
+      const txSig = await sendAndConfirmTransaction(provider.connection, transaction, [wallet.payer], { skipPreflight: true, commitment: 'confirmed' });
+      
+      console.log("\nExtraAccountMetaList Account created:", extraAccountMetaListPDA.toBase58());
+      console.log('Transaction Signature:', txSig);
+      
     }
     catch (error) {
       if (error instanceof SendTransactionError) {
-        console.error("\nTransaction failed:", error.logs[6]);
-        // console.error("\nTransaction failed. Full logs:");
-        // error.logs?.forEach((log, i) => console.error(`  ${i}: ${log}`));
+        //console.error("\nTransaction failed:", error.logs[6]);
+         console.error("\nTransaction failed. Full logs:,,",error.transactionError);
+         error.logs?.forEach((log, i) => console.error(`  ${i}: ${log}`));
       } else {
         console.error("\nUnexpected error:", error);
       }

@@ -38,8 +38,9 @@ pub struct TransferHook<'info> {
         bump
     )]
     pub extra_account_meta_list: UncheckedAccount<'info>,
+    
     #[account(
-        seeds = [b"whitelist",], 
+        seeds = [b"whitelist",source_token.owner.key().as_ref()], 
         bump = whitelist.bump,
     )]
     pub whitelist: Account<'info, Whitelist>,
