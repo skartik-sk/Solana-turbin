@@ -5,6 +5,7 @@ use anchor_spl::token_interface::Mint;
 use spl_tlv_account_resolution::{
     account::ExtraAccountMeta, seeds::Seed, state::ExtraAccountMetaList
 };
+use spl_transfer_hook_interface::solana_msg::msg;
 
 use crate::ID;
 
@@ -31,18 +32,34 @@ pub struct InitializeExtraAccountMetaList<'info> {
 impl<'info> InitializeExtraAccountMetaList<'info> {
     pub fn extra_account_metas() -> Result<Vec<ExtraAccountMeta>> {
         // Derive the whitelist PDA using our program ID
-        // let (whitelist_pda, _bump) = Pubkey::find_program_address(
-        //     &[b"whitelist",],
-            
-        //     //todo
-        //     &ID
-        // );
         
          let seed1 = Seed::Literal { bytes: b"whitelist".to_vec() };
-         let seed2 = Seed::AccountKey { index: 3 };//refer trasfer_hook.rs
+
+         let seed2 = Seed::AccountKey { index: 3 };
+
+
+            let seed3 = Seed::Literal { bytes: b"whitelist".to_vec() };
+
+         let seed4 = Seed::AccountKey { index: 2 };
+        
+        //  let (whitelist_pda, _bump) = Pubkey::find_program_address(
+        //      &[b"whitelist",b"ALH8UD28X24qwGvG2kpTcogg3Wpvu31FrErpLU8vw6oT"],
+             
+        //      //todo
+        //      &ID
+        //  );
+        // msg!("whitelisted pda {:?} ", whitelist_pda.as_array());
+
+         msg!("reached. here ");
+       
+         let datas= ExtraAccountMeta::new_with_seeds(&[seed1,seed2], false, false).unwrap();
+
+        //  let datas2= ExtraAccountMeta::new_with_seeds(&[seed3,seed4], false, false).unwrap();
+         //refer trasfer_hook.rs
         Ok(
             vec![
-                ExtraAccountMeta::new_external_pda_with_seeds(1,&[seed1,seed2], false, false).unwrap(),
+                datas,
+                // datas2
                 // or
                 // ExtraAccountMeta::new_with_pubkey(&whitelist_pda.to_bytes().into(), false, false).unwrap()
             ]

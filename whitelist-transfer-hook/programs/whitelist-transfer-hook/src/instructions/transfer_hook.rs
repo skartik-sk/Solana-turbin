@@ -32,18 +32,26 @@ pub struct TransferHook<'info> {
     pub destination_token: InterfaceAccount<'info, TokenAccount>,
     /// CHECK: source token account owner, can be SystemAccount or PDA owned by another program
     pub owner: UncheckedAccount<'info>,
+    
+
+
+      
     /// CHECK: ExtraAccountMetaList Account,
     #[account(
         seeds = [b"extra-account-metas", mint.key().as_ref()], 
         bump
     )]
     pub extra_account_meta_list: UncheckedAccount<'info>,
+
     
     #[account(
         seeds = [b"whitelist",source_token.owner.key().as_ref()], 
         bump = whitelist.bump,
     )]
     pub whitelist: Account<'info, Whitelist>,
+
+  
+    
 }
 
 impl<'info> TransferHook<'info> {

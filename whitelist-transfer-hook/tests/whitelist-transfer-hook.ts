@@ -74,6 +74,63 @@ describe("whitelist-transfer-hook", () => {
     program.programId
   )[0];
 
+
+
+            const whitelist1 = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("whitelist"),
+      tokenAdmin.toBytes()
+        
+      ],
+      program.programId
+    )[0];
+ 
+
+              const whitelist2 = anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("whitelist"),
+          sourceTokenAccount.toBytes()
+          
+        ],
+        program.programId
+      )[0];
+
+
+                const whitelis3 = anchor.web3.PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("whitelist"),
+            destinationTokenAccount.toBytes()
+            
+          ],
+          program.programId
+        )[0];
+
+
+                  const whitelist4= anchor.web3.PublicKey.findProgramAddressSync(
+            [
+              Buffer.from("whitelist"),
+             mint2022.publicKey.toBytes()
+              
+            ],
+            program.programId
+          )[0];
+console.log("whitelist1:", whitelist1.toBase58());
+console.log("whitelist2:", whitelist2.toBase58());
+console.log("whitelist3:", whitelis3.toBase58());
+console.log("whitelist4:", whitelist4.toBase58());
+
+  //all logs
+  console.info("Token Admin:", tokenAdmin.toBase58());
+  console.info("Whitelist:", whitelist.toBase58());
+  console.info("Mint2022:", mint2022.publicKey.toBase58());
+  console.info("Source Token Account:", sourceTokenAccount.toBase58());
+  console.info("Destination Token Account:", destinationTokenAccount.toBase58());
+  console.info("Extra Account Meta List PDA:", extraAccountMetaListPDA.toBase58());
+
+  console.info("==============================");
+
+
+
   it("Initializes the Whitelist", async () => {
     const tx = await program.methods.initializeWhitelist()
       .accountsPartial({
@@ -83,7 +140,7 @@ describe("whitelist-transfer-hook", () => {
       })
       .rpc();
 
-    console.log("\nWhitelist initialized:", whitelist.toBase58());
+    console.log("\nWhitelist initialized:", tokenAdmin.toBase58());
     console.log("Transaction signature:", tx);
   });
 
@@ -98,6 +155,7 @@ describe("whitelist-transfer-hook", () => {
       .rpc();
 
     console.log("\nUser added to whitelist:", provider.publicKey.toBase58());
+    console.log("Whitelist:", whitelist.toBase58());
     console.log("Transaction signature:", tx);
   });
 
@@ -206,8 +264,8 @@ describe("whitelist-transfer-hook", () => {
       .initializeTransferHook()
       .accountsPartial({
         payer: wallet.publicKey,
-        mint: mint2022.publicKey,
         extraAccountMetaList: extraAccountMetaListPDA,
+        mint: mint2022.publicKey,
         systemProgram: SystemProgram.programId,
       })
       .instruction();
@@ -245,34 +303,32 @@ describe("whitelist-transfer-hook", () => {
     //  source: PublicKey,
     const transferInstruction = await createTransferCheckedWithTransferHookInstruction(
       provider.connection,
-      sourceTokenAccount,
-      mint2022.publicKey,
-      destinationTokenAccount,
-      wallet.publicKey,
-      amountBigInt,
-      9,
-      [],
-      "confirmed",
-      TOKEN_2022_PROGRAM_ID,
-    );
-
-    // Manually add the extra accounts required by the transfer hook
-    // These accounts are needed for the CPI to our transfer hook program
+         sourceTokenAccount,
+         mint2022.publicKey,
+         destinationTokenAccount,
+         wallet.publicKey,
+         amountBigInt,
+         9,
+         [],
+         'confirmed',
+         TOKEN_2022_PROGRAM_ID,
+       );
+   
     
-    const transaction = new Transaction().add(transferInstruction);
+    const transaction = new Transaction().add( transferInstruction);
 
     try {
       // Send the transaction
       const txSig = await sendAndConfirmTransaction(provider.connection, transaction, [wallet.payer], { skipPreflight: true, commitment: 'confirmed' });
       
-      console.log("\nExtraAccountMetaList Account created:", extraAccountMetaListPDA.toBase58());
       console.log('Transaction Signature:', txSig);
       
     }
     catch (error) {
+      console.log(error);
       if (error instanceof SendTransactionError) {
         //console.error("\nTransaction failed:", error.logs[6]);
-         console.error("\nTransaction failed. Full logs:,,",error.transactionError);
+         console.error("\nTransaction failed. Full logs:", error.logs);
          error.logs?.forEach((log, i) => console.error(`  ${i}: ${log}`));
       } else {
         console.error("\nUnexpected error:", error);
