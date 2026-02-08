@@ -26,13 +26,15 @@ pub struct TransferHook<'info> {
     )]
     pub source_token: InterfaceAccount<'info, TokenAccount>,
     pub mint: InterfaceAccount<'info, Mint>,
+
+    
     #[account(
         token::mint = mint,
     )]
     pub destination_token: InterfaceAccount<'info, TokenAccount>,
-    /// CHECK: source token account owner, can be SystemAccount or PDA owned by another program
+   
+     /// CHECK: source token account owner, can be SystemAccount or PDA owned by another program
     pub owner: UncheckedAccount<'info>,
-    
 
 
       
@@ -43,14 +45,16 @@ pub struct TransferHook<'info> {
     )]
     pub extra_account_meta_list: UncheckedAccount<'info>,
 
-    
+
     #[account(
         seeds = [b"whitelist",source_token.owner.key().as_ref()], 
         bump = whitelist.bump,
     )]
     pub whitelist: Account<'info, Whitelist>,
 
-  
+
+        /// CHECK: temp_acc Account,
+  pub temp_acc: UncheckedAccount<'info>,
     
 }
 
@@ -58,7 +62,8 @@ impl<'info> TransferHook<'info> {
     /// This function is called when the transfer hook is executed.
     pub fn transfer_hook(&mut self, _amount: u64) -> Result<()> {
         // Fail this instruction if it is not called from within a transfer hook
-        
+        msg!("temp_acc {:?}", self.temp_acc.to_account_info().key());
+        msg!("whitelist {:?}", self.whitelist.to_account_info().key());
         self.check_is_transferring()?;
 
         msg!("Source token owner: {}", self.source_token.owner);

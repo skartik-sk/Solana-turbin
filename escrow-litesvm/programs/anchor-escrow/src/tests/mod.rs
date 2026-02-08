@@ -1,18 +1,32 @@
 #[cfg(test)]
 mod tests {
 
-   
-    
-    
     use {
         anchor_lang::{
-            AccountDeserialize, InstructionData, ToAccountMetas, prelude::{Clock, msg}, solana_program::program_pack::Pack
-        }, anchor_spl::{
+            prelude::{msg, Clock},
+            solana_program::program_pack::Pack,
+            AccountDeserialize, InstructionData, ToAccountMetas,
+        },
+        anchor_spl::{
             associated_token::{self, spl_associated_token_account},
             token::spl_token,
-        }, litesvm::LiteSVM, litesvm_token::{
-            CreateAssociatedTokenAccount, CreateMint, MintTo, spl_token::ID as TOKEN_PROGRAM_ID
-        }, solana_account::Account, solana_address::Address, solana_instruction::Instruction, solana_keypair::Keypair, solana_message::{Message, VersionedMessage}, solana_native_token::LAMPORTS_PER_SOL, solana_pubkey::Pubkey, solana_rpc_client::rpc_client::RpcClient, solana_sdk_ids::system_program::ID as SYSTEM_PROGRAM_ID, solana_signer::Signer, solana_transaction::Transaction, std::{path::PathBuf, str::FromStr}
+        },
+        litesvm::LiteSVM,
+        litesvm_token::{
+            spl_token::ID as TOKEN_PROGRAM_ID, CreateAssociatedTokenAccount, CreateMint, MintTo,
+        },
+        solana_account::Account,
+        solana_address::Address,
+        solana_instruction::Instruction,
+        solana_keypair::Keypair,
+        solana_message::{Message, VersionedMessage},
+        solana_native_token::LAMPORTS_PER_SOL,
+        solana_pubkey::Pubkey,
+        solana_rpc_client::rpc_client::RpcClient,
+        solana_sdk_ids::system_program::ID as SYSTEM_PROGRAM_ID,
+        solana_signer::Signer,
+        solana_transaction::Transaction,
+        std::{path::PathBuf, str::FromStr},
     };
 
     static PROGRAM_ID: Pubkey = crate::ID;
@@ -399,9 +413,9 @@ mod tests {
             spl_token::state::Account::unpack(&maker_ata_a_account.data).unwrap();
         assert_eq!(maker_ata_a_data.amount, 1000000000 - 10);
     }
- 
-   #[test]
- fn test_take_sucess() {
+
+    #[test]
+    fn test_take_sucess() {
         // Setup the test environment by initializing LiteSVM and creating a payer keypair
         let (mut program, payer) = setup();
 
@@ -541,15 +555,11 @@ mod tests {
         assert_eq!(escrow_data.mint_b, mint_b);
         assert_eq!(escrow_data.receive, 10);
 
-
-
-
         //*time traverl bolte */
-let time_for_5day_plus = 5 * 24 * 60 * 60;
-    
-    initial_clock.unix_timestamp = initial_clock.unix_timestamp+time_for_5day_plus;
-    program.set_sysvar::<Clock>(&initial_clock);
-    
+        let time_for_5day_plus = 5 * 24 * 60 * 60;
+
+        initial_clock.unix_timestamp = initial_clock.unix_timestamp + time_for_5day_plus;
+        program.set_sysvar::<Clock>(&initial_clock);
 
         // Create the "take" instruction to take tokens into the account
         let take_ix = Instruction {

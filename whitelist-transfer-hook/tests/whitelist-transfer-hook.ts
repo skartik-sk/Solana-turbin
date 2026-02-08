@@ -73,55 +73,19 @@ describe("whitelist-transfer-hook", () => {
     ],
     program.programId
   )[0];
-
-
-
-            const whitelist1 = anchor.web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("whitelist"),
-      tokenAdmin.toBytes()
-        
-      ],
-      program.programId
-    )[0];
- 
-
-              const whitelist2 = anchor.web3.PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("whitelist"),
-          sourceTokenAccount.toBytes()
-          
-        ],
-        program.programId
-      )[0];
-
-
-                const whitelis3 = anchor.web3.PublicKey.findProgramAddressSync(
-          [
-            Buffer.from("whitelist"),
-            destinationTokenAccount.toBytes()
-            
-          ],
-          program.programId
-        )[0];
-
-
-                  const whitelist4= anchor.web3.PublicKey.findProgramAddressSync(
-            [
-              Buffer.from("whitelist"),
-             mint2022.publicKey.toBytes()
-              
-            ],
-            program.programId
-          )[0];
-console.log("whitelist1:", whitelist1.toBase58());
-console.log("whitelist2:", whitelist2.toBase58());
-console.log("whitelist3:", whitelis3.toBase58());
-console.log("whitelist4:", whitelist4.toBase58());
-
+  
+   const whitelist1 = anchor.web3.PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("whitelist"),
+      destinationTokenAccount.toBytes()
+      
+    ],
+    program.programId
+  )[0];
   //all logs
   console.info("Token Admin:", tokenAdmin.toBase58());
   console.info("Whitelist:", whitelist.toBase58());
+  console.info("Whitelist1:", whitelist1.toBase58());
   console.info("Mint2022:", mint2022.publicKey.toBase58());
   console.info("Source Token Account:", sourceTokenAccount.toBase58());
   console.info("Destination Token Account:", destinationTokenAccount.toBase58());
@@ -159,7 +123,7 @@ console.log("whitelist4:", whitelist4.toBase58());
     console.log("Transaction signature:", tx);
   });
 
-  xit("Remove user to whitelist", async () => {
+  it("Remove user to whitelist", async () => {
     const tx = await program.methods.removeFromWhitelist(provider.publicKey)
       .accountsPartial({
         admin: provider.publicKey,
@@ -195,7 +159,7 @@ console.log("whitelist4:", whitelist4.toBase58());
 
     const txSig = await sendAndConfirmTransaction(provider.connection, transaction, [wallet.payer, mint2022], {
       skipPreflight: true,
-      commitment: 'finalized',
+      commitment: 'confirmed',
     });
 
     const txDetails = await program.provider.connection.getTransaction(txSig, {
@@ -301,8 +265,8 @@ console.log("whitelist4:", whitelist4.toBase58());
 
     // Create the base transfer instruction
     //  source: PublicKey,
-    const transferInstruction = await createTransferCheckedWithTransferHookInstruction(
-      provider.connection,
+ const transferInstruction = await createTransferCheckedWithTransferHookInstruction(
+provider.connection,
          sourceTokenAccount,
          mint2022.publicKey,
          destinationTokenAccount,
@@ -310,11 +274,48 @@ console.log("whitelist4:", whitelist4.toBase58());
          amountBigInt,
          9,
          [],
-         'confirmed',
+'confirmed',
          TOKEN_2022_PROGRAM_ID,
        );
    
-    
+      
+    //!or
+    // const transferInstruction = await createTransferCheckedInstruction(
+
+    //      sourceTokenAccount,
+    //      mint2022.publicKey,
+    //      destinationTokenAccount,
+    //      wallet.publicKey,
+    //      amountBigInt,
+    //      9,
+    //      [],
+
+    //      TOKEN_2022_PROGRAM_ID,
+    //    );
+   
+    //    // Manually add the extra accounts required by the transfer hook
+    //    // These accounts are needed for the CPI to our transfer hook program
+    //    transferInstruction.keys.push(
+    //      // ExtraAccountMetaList PDA
+    //      { pubkey: extraAccountMetaListPDA, isSigner: false, isWritable: false },
+
+    //      {pubkey: whitelist, isSigner: false, isWritable: false},
+    //     //  {pubkey: whitelist1, isSigner: false, isWritable: false},
+
+    //       { pubkey: program.programId, isSigner: false, isWritable: false },
+
+
+
+
+         
+ 
+    //    );
+
+
+
+
+
+
     const transaction = new Transaction().add( transferInstruction);
 
     try {

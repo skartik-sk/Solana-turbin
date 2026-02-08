@@ -3,8 +3,8 @@
 
 use anchor_lang::prelude::*;
 
-mod state;
 mod instructions;
+mod state;
 mod tests;
 
 use instructions::*;
@@ -29,18 +29,19 @@ pub mod anchor_escrow {
 
     pub fn take(ctx: Context<Take>) -> Result<()> {
         let current_time = Clock::get()?.unix_timestamp;
-require!(current_time -ctx.accounts.escrow.created_at >= (5*24*60*60), CustomError::EscrowLocked);            
-            ctx.accounts.deposit()?;
-            ctx.accounts.withdraw_and_close_vault();
+        require!(
+            current_time - ctx.accounts.escrow.created_at >= (5 * 24 * 60 * 60),
+            CustomError::EscrowLocked
+        );
+        ctx.accounts.deposit()?;
+        ctx.accounts.withdraw_and_close_vault();
 
-Ok(())
+        Ok(())
     }
 }
 
 #[error_code]
 pub enum CustomError {
     #[msg("You can take escrow only after 5 days")]
-    EscrowLocked
-    
+    EscrowLocked,
 }
-

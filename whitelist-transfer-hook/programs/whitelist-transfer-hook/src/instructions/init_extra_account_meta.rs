@@ -54,12 +54,12 @@ impl<'info> InitializeExtraAccountMetaList<'info> {
        
          let datas= ExtraAccountMeta::new_with_seeds(&[seed1,seed2], false, false).unwrap();
 
-        //  let datas2= ExtraAccountMeta::new_with_seeds(&[seed3,seed4], false, false).unwrap();
+         let datas2= ExtraAccountMeta::new_with_seeds(&[seed3,seed4], false, false).unwrap();
          //refer trasfer_hook.rs
         Ok(
             vec![
                 datas,
-                // datas2
+                datas2
                 // or
                 // ExtraAccountMeta::new_with_pubkey(&whitelist_pda.to_bytes().into(), false, false).unwrap()
             ]
