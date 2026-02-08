@@ -9,4 +9,6 @@ pub struct Escrow {
     pub mint_b: Pubkey,
     pub receive: u64,
     pub bump: u8,
+    // time when escrow was created
+    pub created_at: i64,
 }

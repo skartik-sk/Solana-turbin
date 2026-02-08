@@ -1,4 +1,4 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, solana_program::clock::UnixTimestamp};
 use anchor_spl::{associated_token::AssociatedToken, token_interface::{Mint, TokenAccount, TokenInterface, TransferChecked, transfer_checked}};
 
 use crate::state::Escrow;
@@ -38,6 +38,9 @@ pub struct Make<'info> {
 
 impl<'info> Make<'info> {
     pub fn init_escrow(&mut self, seed: u64, receive: u64, bumps: &MakeBumps) -> Result<()> {
+        //to get the current tiem. in unix timestamp;
+        let time=Clock::get()?.unix_timestamp;
+
         self.escrow.set_inner(Escrow {
             seed,
             maker: self.maker.key(),
@@ -45,6 +48,7 @@ impl<'info> Make<'info> {
             mint_b: self.mint_b.key(),
             receive,
             bump: bumps.escrow,
+            created_at:time
         });
 
         Ok(())
