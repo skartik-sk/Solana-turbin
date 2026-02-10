@@ -96,9 +96,7 @@ mod tests {
             .to_account_metas(None),
             data: crate::instruction::CrateVaultAndMint {
                 fee: 50, // 0.5%
-                name: "Vault Token".to_string(),
-                symbol: "VTKN".to_string(),
-                uri: "https://vault.io/token.json".to_string(),
+               
                 decimal: 6,
             }
             .data(),
@@ -135,7 +133,7 @@ mod tests {
         msg!("   Fee: {}bps", vault_data.fees);
     }
 
-    // #[test]
+     #[test]
     fn test_initialize_transfer_hook() {
         msg!("\n🧪 TEST: Initialize Transfer Hook\n");
 
@@ -159,9 +157,7 @@ mod tests {
             .to_account_metas(None),
             data: crate::instruction::CrateVaultAndMint {
                 fee: 50,
-                name: "Test".to_string(),
-                symbol: "TST".to_string(),
-                uri: "https://test.com".to_string(),
+               
                 decimal: 9,
             }
             .data(),
@@ -215,7 +211,7 @@ mod tests {
         );
     }
 
-    // #[test]
+     #[test]
     fn test_whitelist_operations() {
         msg!("\n🧪 TEST: Whitelist Operations\n");
 
@@ -242,9 +238,7 @@ mod tests {
             .to_account_metas(None),
             data: crate::instruction::CrateVaultAndMint {
                 fee: 50,
-                name: "Test".to_string(),
-                symbol: "TST".to_string(),
-                uri: "https://test.com".to_string(),
+               
                 decimal: 9,
             }
             .data(),
@@ -326,12 +320,12 @@ mod tests {
         msg!("✅ User removed from whitelist");
 
         // Verify account is closed
-        let user_account_after = svm.get_account(&user_pda);
-        assert!(user_account_after.is_none());
+        let user_account_after = svm.get_account(&user_pda).unwrap();
+        assert_eq!(user_account_after.lamports, 0);
         msg!("✅ User account closed successfully");
     }
 
-    // #[test]
+     #[test]
     fn test_deposit_and_withdraw() {
         msg!("\n🧪 TEST: Deposit and Withdraw\n");
 
@@ -359,9 +353,7 @@ mod tests {
             .to_account_metas(None),
             data: crate::instruction::CrateVaultAndMint {
                 fee: 50,
-                name: "Test".to_string(),
-                symbol: "TST".to_string(),
-                uri: "https://test.com".to_string(),
+               
                 decimal: 9,
             }
             .data(),
@@ -445,7 +437,7 @@ mod tests {
         msg!("   CUs consumed: {}", result.compute_units_consumed);
 
         // Verify deposit
-        let vault_balance_after = svm.get_balance(&vault_pda).unwrap_or(0);
+        let vault_balance_after = svm.get_balance(&vault_pda).unwrap_or(0);msg!("balacnes are {}, are {}",vault_balance_before,vault_balance_after);
         assert_eq!(vault_balance_after - vault_balance_before, deposit_amount);
         msg!(
             "✅ Vault balance increased by {} SOL",
@@ -502,7 +494,7 @@ mod tests {
         );
     }
 
-    // #[test]
+    #[test]
     fn test_non_admin_cannot_whitelist() {
         msg!("\n🧪 TEST: Non-Admin Cannot Whitelist\n");
 
@@ -532,9 +524,7 @@ mod tests {
             .to_account_metas(None),
             data: crate::instruction::CrateVaultAndMint {
                 fee: 50,
-                name: "Test".to_string(),
-                symbol: "TST".to_string(),
-                uri: "https://test.com".to_string(),
+
                 decimal: 9,
             }
             .data(),
@@ -575,7 +565,7 @@ mod tests {
         msg!("✅ Non-admin correctly rejected from whitelisting");
     }
 
-    // #[test]
+    #[test]
     fn test_full_workflow() {
         msg!("\n🧪 TEST: Full Workflow (Create → Whitelist → Deposit → Withdraw)\n");
 
@@ -605,18 +595,18 @@ mod tests {
             .to_account_metas(None),
             data: crate::instruction::CrateVaultAndMint {
                 fee: 50,
-                name: "Vault Token".to_string(),
-                symbol: "VTKN".to_string(),
-                uri: "https://vault.io/token.json".to_string(),
+
                 decimal: 9,
             }
             .data(),
         };
+        
 
         let message = Message::new(&[create_vault_ix], Some(&payer.pubkey()));
         let blockhash = svm.latest_blockhash();
         let tx = Transaction::new(&[&payer, &mint], message, blockhash);
         svm.send_transaction(tx).unwrap();
+        let vault_initialize_balance=svm.get_balance(&vault_pda).unwrap_or(0);
         msg!("   ✅ Vault created");
 
         // 2. Initialize transfer hook
@@ -750,7 +740,7 @@ mod tests {
         // 7. Verify final state
         msg!("\n7️⃣ Verifying final state...");
         let vault_balance = svm.get_balance(&vault_pda).unwrap_or(0);
-        let expected_vault_balance = deposit_amount - withdraw_amount;
+        let expected_vault_balance = deposit_amount - withdraw_amount + vault_initialize_balance;
         assert_eq!(vault_balance, expected_vault_balance);
         msg!(
             "   ✅ Vault balance: {} SOL",
@@ -760,7 +750,7 @@ mod tests {
         msg!("\n✅ Full workflow completed successfully!");
     }
 
-    // #[test]
+     #[test]
     #[should_panic]
     fn test_cannot_deposit_without_whitelist() {
         msg!("\n🧪 TEST: Cannot Deposit Without Whitelist\n");
@@ -788,9 +778,6 @@ mod tests {
             .to_account_metas(None),
             data: crate::instruction::CrateVaultAndMint {
                 fee: 50,
-                name: "Test".to_string(),
-                symbol: "TST".to_string(),
-                uri: "https://test.com".to_string(),
                 decimal: 9,
             }
             .data(),

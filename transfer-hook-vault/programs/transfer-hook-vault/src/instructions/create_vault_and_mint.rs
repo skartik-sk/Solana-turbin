@@ -1,24 +1,21 @@
-use anchor_lang::{
-    prelude::*,
-    solana_program::program::invoke,
-    system_program::{ },
-};
 
-use anchor_spl::{
-    token_interface::{TokenInterface, TransferFeeInitialize, spl_pod::optional_keys::OptionalNonZeroPubkey, transfer_fee_initialize},
-    *,
-};
+use anchor_lang::{prelude::*, solana_program::program::invoke, system_program::{CreateAccount, create_account}};
+use anchor_spl::{token_2022::{Token2022,  spl_token_2022::{
+       extension::{ExtensionType, transfer_hook::instruction::initialize as add_transfer_hook,
+           transfer_fee::instruction::initialize_transfer_fee_config },
+       instruction::initialize_mint2,
+       state::Mint as TokenMint,
+   }}, token_interface::{
+    Mint, 
+    TokenInterface, spl_pod::optional_keys::OptionalNonZeroPubkey,
+}};
 
-use solana_system_interface::instruction::create_account;
+
 use spl_token_2022::{
-    extension::*,
-    instruction::{initialize_mint2, initialize_permanent_delegate},
-    state::Mint,
-    *,
-};
+    instruction::{ initialize_permanent_delegate},
 
-use spl_token_metadata_interface::{state::TokenMetadata, *};
-use spl_type_length_value::variable_len_pack::VariableLenPack;
+
+};
 
 use crate::{constatnt::VAULT, state::Vault};
 
@@ -58,83 +55,46 @@ impl<'a> CreateVault<'a> {
     pub fn mint_token(
         &mut self,
         fee: u8,
-        name: String,
-        symbol: String,
-        uri: String,
         decimal: u8,
     ) -> Result<()> {
         let extension_types = vec![
             ExtensionType::TransferHook,
-            ExtensionType::TransferFeeAmount,
+            ExtensionType::TransferFeeConfig,
             ExtensionType::PermanentDelegate,
         ];
-        let space = ExtensionType::try_calculate_account_len::<Mint>(&extension_types).unwrap();
+        let space = ExtensionType::try_calculate_account_len::<TokenMint>(&extension_types).unwrap();
 
-        let token_metadata = TokenMetadata {
-            name: name,
-            symbol: symbol,
-            uri: uri,
-            mint: self.mint.key(),
-            update_authority: OptionalNonZeroPubkey(self.admin.key()),
-            additional_metadata: vec![],
-        };
+        let lamport = Rent::get().unwrap().minimum_balance(space );
 
-        let metadata_space = token_metadata.get_packed_len().unwrap() + 8;
-
-        let lamport = Rent::get().unwrap().minimum_balance(space + metadata_space);
-
-        let create_ix = create_account(
-            &self.admin.key(),
-            &self.mint.key(),
+        create_account(
+            CpiContext::new(
+                self.system_program.to_account_info(),
+                CreateAccount {
+                    from: self.admin.to_account_info(),
+                    to: self.mint.to_account_info(),
+                },
+            ),
             lamport,
             space as u64,
             &self.token_program.key(),
-        );
-
-        invoke(
-            &create_ix,
-            &[
-                self.admin.to_account_info(),
-                self.mint.to_account_info(),
-                self.system_program.to_account_info(),
-            ],
-        ).unwrap();
-
-        msg!("Mint account created");
-        msg!("logs {}",crate::ID);
-        let init_hook_ix = transfer_hook::instruction::initialize(
+        )?;
+        
+        let init_hook_ix = add_transfer_hook(
             &self.token_program.key(),
             &self.mint.key(),
-            Some(self.admin.key()),
+            Some(self.vault.key()),
             Some(crate::ID),
         )?;
-        invoke(
-            &init_hook_ix,
-            &[
-                self.mint.to_account_info(),
-            ],
-        )?;
-        msg!("transfer hook added ");
-        
-        // transfer_fee_initialize(
-        //         CpiContext::new(
-        //             self.token_program.to_account_info(),
-        //             TransferFeeInitialize {
-        //                 token_program_id: self.token_program.to_account_info(),
-        //                 mint: self.mint.to_account_info(),
-        //             },
-        //         ),
-        //         Some(&self.admin.key()), // transfer fee config authority (update fee)
-        //         Some(&self.admin.key()), // withdraw authority (withdraw fees)
-        //         fee.into(),       // transfer fee basis points (% fee per transfer)
-        //         decimal.into(),                     // maximum fee (maximum units of token per transfer)
-        //     )?;
-        // 
-        // 
-        let init_tran_fee_ix = transfer_fee::instruction::initialize_transfer_fee_config(
+
+        invoke(&init_hook_ix, &[self.mint.to_account_info()])?;
+
+        msg!("Transfer hook extension initialized");
+
+
+        let init_tran_fee_ix = initialize_transfer_fee_config(
             &self.token_program.key(),
             &self.mint.key(),
-            Some(&self.admin.key()),
+            Some(&self.vault.key()),
             Some(&self.admin.key()),
             fee.into(),             // 100 = 1%
             ( decimal).into(), // max 100 token = 100sol
@@ -148,18 +108,24 @@ impl<'a> CreateVault<'a> {
             &self.mint.key(),
             &self.vault.key(),
         )
-        .unwrap();
-        invoke(&init_perm_deli_ix, &[self.mint.to_account_info()]).unwrap();
+        ?;
+        invoke(&init_perm_deli_ix, &[self.mint.to_account_info()])?;
+ msg!("premanent deligation  added ");
+ 
 
+       
         let init_mint_ix = initialize_mint2(
             &self.token_program.key(),
             &self.mint.key(),
             &self.vault.key(),
             Some(&self.vault.key()),
             decimal,
-        )
-        .unwrap();
-        invoke(&init_mint_ix, &[self.mint.to_account_info()]).unwrap();
+        )?;
+        msg!("{:?}",init_mint_ix);
+
+        invoke(&init_mint_ix, &[self.mint.to_account_info()])?;
+
+         msg!("mint  added ");
         Ok(())
     }
 }

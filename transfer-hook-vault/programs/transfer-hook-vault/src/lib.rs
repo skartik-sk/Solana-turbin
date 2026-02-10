@@ -22,12 +22,9 @@ pub mod transfer_hook_vault {
     pub fn crate_vault_and_mint(
         ctx: Context<CreateVault>,
         fee: u8,
-        name: String,
-        symbol: String,
-        uri: String,
         decimal: u8,
     ) -> Result<()> {
-        ctx.accounts.mint_token(fee, name, symbol, uri, decimal)?;
+        ctx.accounts.mint_token(fee, decimal)?;
         ctx.accounts.create_vault(fee, ctx.bumps)?;
         Ok(())
     }
@@ -42,7 +39,7 @@ pub mod transfer_hook_vault {
     }
 
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
-        ctx.accounts.deposit(amount);
+        ctx.accounts.deposit(amount)?;
         Ok(())
     }
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {

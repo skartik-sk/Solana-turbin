@@ -1,7 +1,10 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    associated_token::AssociatedToken, token_2022::{MintTo, MintToChecked, Transfer, mint_to_checked}, token_interface::{Mint, TokenAccount, TokenInterface}
+    associated_token::AssociatedToken, token_2022::{MintTo, MintToChecked, mint_to_checked}, token_interface::{Mint, TokenAccount, TokenInterface}
 };
+// Option 1: Use System Program CPI
+use anchor_lang::system_program::{transfer, Transfer};
+
 
 use crate::{
     constatnt::{USER, VAULT},
@@ -14,10 +17,11 @@ pub struct Deposit<'a> {
     #[account(mut)]
     pub owner: Signer<'a>,
 
-    #[account()]
+    #[account(mut)]
     pub mint: InterfaceAccount<'a, Mint>,
 
     #[account(
+        mut,
      seeds=[VAULT.as_bytes(),vault.admin.key().as_ref()],
      bump,
  )]
@@ -40,15 +44,25 @@ pub struct Deposit<'a> {
 }
 
 impl<'a> Deposit<'a> {
-    pub fn deposit(&mut self, amount: u64) {
+    pub fn deposit(&mut self, amount: u64)->Result<()> {
         if !self.user.address.key().eq(&self.owner.key()) {
             MyError::Unauthorized;
         }
+        
+       
+     
+        transfer(
+            CpiContext::new(
+                self.system_program.to_account_info(),
+                Transfer {
+                    from: self.owner.to_account_info(),
+                    to: self.vault.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
 
-        **self.owner.lamports.borrow_mut() -= amount;
-        **self.vault.to_account_info().lamports.borrow_mut() += amount;
-
-        let vault_sate_key = self.vault.to_account_info().key();
+        let vault_sate_key = self.vault.admin.key();
 
         let seeds = &[
             VAULT.as_bytes(),
@@ -71,6 +85,7 @@ impl<'a> Deposit<'a> {
             amount,
             self.mint.decimals,
         )
-        .unwrap();
+        ?;
+        Ok(())
     }
 }

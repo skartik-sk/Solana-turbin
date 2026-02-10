@@ -1,4 +1,4 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, solana_program::{program::invoke_signed, system_instruction}, system_program::{Transfer as SolTransfer, transfer}};
 use anchor_spl::{
     associated_token::AssociatedToken, token_2022::{BurnChecked, MintTo, MintToChecked, Transfer, burn_checked, mint_to_checked}, token_interface::{Mint, TokenAccount, TokenInterface}
 };
@@ -13,17 +13,18 @@ pub struct Withdraw<'a> {
     pub owner: Signer<'a>,
 
     #[account(
-        
+        mut
     )]
     pub mint: InterfaceAccount<'a,Mint>,
 
     #[account(
+        mut,
      seeds=[VAULT.as_bytes(),vault.admin.key().as_ref()],
      bump,
  )]
     pub vault: Account<'a, Vault>,
 
-    #[account(init,payer=owner,space = 8+User::LEN,seeds=[USER.as_bytes(),owner.key().as_ref()], bump)]
+    #[account(seeds=[USER.as_bytes(),owner.key().as_ref()], bump)]
     pub user: Account<'a, User>,
     
     
@@ -41,21 +42,53 @@ pub struct Withdraw<'a> {
 }
 
 impl<'a> Withdraw<'a> {
-    pub fn withdraw(&mut self, amount: u64) {
-        //not used but to be sure. 
-        if !self.user.address.key().eq(&self.owner.key()){
-            MyError::Unauthorized;
-        }
+    pub fn withdraw(&mut self, amount: u64)->Result<()> {
+               require!(
+                   self.user.address.key().eq(&self.owner.key()),
+                   MyError::Unauthorized
+               );
+               
+               
+               let vault_minimum_balance = Rent::get()?.minimum_balance(self.vault.to_account_info().data_len());
+               
+               
+               let vault_balance = self.vault.to_account_info().lamports();
+               require!(
+                   vault_balance >= amount + vault_minimum_balance,
+                   MyError::InsufficientFunds
+               );
+               
+              
+           
         
-        **self.owner.lamports.borrow_mut() +=amount;
-        **self.vault.to_account_info().lamports.borrow_mut() -=amount;
         
         
-        let vault_sate_key= self.vault.to_account_info().key();
+        let vault_sate_key= self.vault.admin.key();
         
                 let seeds = &[VAULT.as_bytes(),vault_sate_key.as_ref(),&[self.vault.bump]];
         
                 let signer_seed = &[&seeds[..]];
+                
+               
+
+                
+                
+                
+                // let transfer_ix = system_instruction::transfer(
+                //             &self.vault.key(),
+                //             &self.owner.key(),
+                //             amount,
+                //         );
+                        
+                //         invoke_signed(
+                //             &transfer_ix,
+                //             &[
+                //                 self.vault.to_account_info(),
+                //                 self.owner.to_account_info(),
+                //                 self.system_program.to_account_info(),
+                //             ],
+                //             signer_seed,
+                //         )?;
         
  burn_checked(
             CpiContext::new_with_signer(self.token_program.to_account_info(),BurnChecked{
@@ -66,10 +99,27 @@ impl<'a> Withdraw<'a> {
             amount,
             self.mint.decimals
             
-        ).unwrap();
+        )?;
+ 
+ **self.vault.to_account_info().try_borrow_mut_lamports()? -= amount;
+ **self.owner.to_account_info().try_borrow_mut_lamports()? += amount;
+ 
+
+
+ 
+ 
+ 
+ // let tx = SolTransfer{
+ //             from:self.vault.to_account_info(),
+ //             to:self.owner.to_account_info()
+ //         };
+ 
+         
+ //         let tra = CpiContext::new_with_signer(self.system_program.to_account_info(), tx,signer_seed);
+ 
+ //         transfer(tra, amount)?;
         
-        
-        
+ Ok(())
         
         
     }
