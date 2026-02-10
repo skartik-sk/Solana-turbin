@@ -1,10 +1,21 @@
-use anchor_lang::prelude::{program::invoke, system_instruction::create_account, *};
+use anchor_lang::{
+    prelude::*,
+    solana_program::program::invoke,
+    system_program::{ },
+};
 
 use anchor_spl::{
-    token_interface::{spl_pod::optional_keys::OptionalNonZeroPubkey, TokenInterface},
+    token_interface::{TokenInterface, TransferFeeInitialize, spl_pod::optional_keys::OptionalNonZeroPubkey, transfer_fee_initialize},
     *,
 };
-use spl_token_2022::{extension::*, instruction::{initialize_mint2, initialize_permanent_delegate}, state::Mint, *};
+
+use solana_system_interface::instruction::create_account;
+use spl_token_2022::{
+    extension::*,
+    instruction::{initialize_mint2, initialize_permanent_delegate},
+    state::Mint,
+    *,
+};
 
 use spl_token_metadata_interface::{state::TokenMetadata, *};
 use spl_type_length_value::variable_len_pack::VariableLenPack;
@@ -34,20 +45,28 @@ pub struct CreateVault<'a> {
 }
 
 impl<'a> CreateVault<'a> {
-    pub fn create_vault(&mut self, fees: u8, bump: CreateVaultBumps) {
+    pub fn create_vault(&mut self, fees: u8, bump: CreateVaultBumps) -> Result<()> {
         self.vault.set_inner(Vault {
             mint_token: self.mint.key(),
             admin: self.admin.key(),
             fees,
             bump: bump.vault,
         });
+        Ok(())
     }
 
-    pub fn mint_token(&mut self, fee: u8, name: String, symbol: String, uri: String, decimal: u8) {
+    pub fn mint_token(
+        &mut self,
+        fee: u8,
+        name: String,
+        symbol: String,
+        uri: String,
+        decimal: u8,
+    ) -> Result<()> {
         let extension_types = vec![
             ExtensionType::TransferHook,
             ExtensionType::TransferFeeAmount,
-            ExtensionType::PermanentDelegate
+            ExtensionType::PermanentDelegate,
         ];
         let space = ExtensionType::try_calculate_account_len::<Mint>(&extension_types).unwrap();
 
@@ -81,27 +100,49 @@ impl<'a> CreateVault<'a> {
             ],
         ).unwrap();
 
+        msg!("Mint account created");
+        msg!("logs {}",crate::ID);
         let init_hook_ix = transfer_hook::instruction::initialize(
             &self.token_program.key(),
             &self.mint.key(),
             Some(self.admin.key()),
             Some(crate::ID),
-        )
-        .unwrap();
-        invoke(&init_hook_ix, &[self.mint.to_account_info()]).unwrap();
-
+        )?;
+        invoke(
+            &init_hook_ix,
+            &[
+                self.mint.to_account_info(),
+            ],
+        )?;
+        msg!("transfer hook added ");
+        
+        // transfer_fee_initialize(
+        //         CpiContext::new(
+        //             self.token_program.to_account_info(),
+        //             TransferFeeInitialize {
+        //                 token_program_id: self.token_program.to_account_info(),
+        //                 mint: self.mint.to_account_info(),
+        //             },
+        //         ),
+        //         Some(&self.admin.key()), // transfer fee config authority (update fee)
+        //         Some(&self.admin.key()), // withdraw authority (withdraw fees)
+        //         fee.into(),       // transfer fee basis points (% fee per transfer)
+        //         decimal.into(),                     // maximum fee (maximum units of token per transfer)
+        //     )?;
+        // 
+        // 
         let init_tran_fee_ix = transfer_fee::instruction::initialize_transfer_fee_config(
             &self.token_program.key(),
             &self.mint.key(),
             Some(&self.admin.key()),
             Some(&self.admin.key()),
             fee.into(),             // 100 = 1%
-            (100 * decimal).into(), // max 100 token = 100sol
-        )
-        .unwrap();
-        invoke(&init_tran_fee_ix, &[self.mint.to_account_info()]).unwrap();
+            ( decimal).into(), // max 100 token = 100sol
+        )?;
         
-        
+        invoke(&init_tran_fee_ix, &[self.mint.to_account_info()])?;
+        msg!("trasection fee added ");
+
         let init_perm_deli_ix = initialize_permanent_delegate(
             &self.token_program.key(),
             &self.mint.key(),
@@ -109,7 +150,6 @@ impl<'a> CreateVault<'a> {
         )
         .unwrap();
         invoke(&init_perm_deli_ix, &[self.mint.to_account_info()]).unwrap();
-
 
         let init_mint_ix = initialize_mint2(
             &self.token_program.key(),
@@ -120,5 +160,6 @@ impl<'a> CreateVault<'a> {
         )
         .unwrap();
         invoke(&init_mint_ix, &[self.mint.to_account_info()]).unwrap();
+        Ok(())
     }
 }

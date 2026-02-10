@@ -4,7 +4,9 @@ use anchor_spl::{
 };
 
 use crate::{
-    constatnt::{USER, VAULT}, error::MyError, state::{User, Vault}
+    constatnt::{USER, VAULT},
+    error::MyError,
+    state::{User, Vault},
 };
 
 #[derive(Accounts)]
@@ -12,10 +14,8 @@ pub struct Deposit<'a> {
     #[account(mut)]
     pub owner: Signer<'a>,
 
-    #[account(
-        
-    )]
-    pub mint: InterfaceAccount<'a,Mint>,
+    #[account()]
+    pub mint: InterfaceAccount<'a, Mint>,
 
     #[account(
      seeds=[VAULT.as_bytes(),vault.admin.key().as_ref()],
@@ -25,8 +25,7 @@ pub struct Deposit<'a> {
 
     #[account(mut ,seeds=[USER.as_bytes(),owner.key().as_ref()], bump)]
     pub user: Account<'a, User>,
-    
-    
+
     #[account(
       mut,
       associated_token::mint = mint,
@@ -42,31 +41,36 @@ pub struct Deposit<'a> {
 
 impl<'a> Deposit<'a> {
     pub fn deposit(&mut self, amount: u64) {
-         if !self.user.address.key().eq(&self.owner.key()){
-             MyError::Unauthorized;
-         }
-        
-        **self.owner.lamports.borrow_mut() -=amount;
-        **self.vault.to_account_info().lamports.borrow_mut() +=amount;
-        
-        
-        let vault_sate_key= self.vault.to_account_info().key();
-        
-                let seeds = &[VAULT.as_bytes(),vault_sate_key.as_ref(),&[self.vault.bump]];
-        
-                let signer_seed = &[&seeds[..]];
-        
- mint_to_checked(
-            CpiContext::new_with_signer(self.token_program.to_account_info(),MintToChecked{
-                mint:self.mint.to_account_info(),
-                authority:self.vault.to_account_info(),
-                to:self.owner_ata.to_account_info()
-            },signer_seed),
-            amount,
-            self.mint.decimals
-            
-        ).unwrap();
-        
+        if !self.user.address.key().eq(&self.owner.key()) {
+            MyError::Unauthorized;
+        }
 
+        **self.owner.lamports.borrow_mut() -= amount;
+        **self.vault.to_account_info().lamports.borrow_mut() += amount;
+
+        let vault_sate_key = self.vault.to_account_info().key();
+
+        let seeds = &[
+            VAULT.as_bytes(),
+            vault_sate_key.as_ref(),
+            &[self.vault.bump],
+        ];
+
+        let signer_seed = &[&seeds[..]];
+
+        mint_to_checked(
+            CpiContext::new_with_signer(
+                self.token_program.to_account_info(),
+                MintToChecked {
+                    mint: self.mint.to_account_info(),
+                    authority: self.vault.to_account_info(),
+                    to: self.owner_ata.to_account_info(),
+                },
+                signer_seed,
+            ),
+            amount,
+            self.mint.decimals,
+        )
+        .unwrap();
     }
 }

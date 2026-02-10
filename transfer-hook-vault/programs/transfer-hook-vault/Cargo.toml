@@ -2,7 +2,7 @@
 name = "transfer-hook-vault"
 version = "0.1.0"
 description = "Created with Anchor"
-edition = "2024"
+edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
@@ -21,14 +21,35 @@ custom-panic = []
 
 
 [dependencies]
-anchor-lang = { version = "0.32.1", features = ["interface-instructions", "init-if-needed"] }
-anchor-spl = { version = "0.32.1", features = ["token_2022"] }
+anchor-lang = { version = "0.31.1", features = ["interface-instructions", "init-if-needed"] }
+anchor-spl = { version = "0.31.1", features = ["token_2022"] }
 spl-transfer-hook-interface = "2.1.0"
 spl-token-2022 = { version = "8.0.1", features = ["no-entrypoint"] }
 spl-discriminator = "0.5.1"
 spl-tlv-account-resolution = "0.11.1"
 spl-token-metadata-interface = "0.7"
 spl-type-length-value = "0.8"
+solana-system-interface = "1.0.0"
+
+
+
+[dev-dependencies]
+litesvm = "0.6.1"
+litesvm-token = "0.6.1"
+
+solana-instruction = "2.2.1"
+solana-keypair = "2.2.1"
+solana-native-token = "2.2.1"
+solana-pubkey = "2.2.1"
+solana-signer = "2.2.1"
+solana-system-interface = "1.0.0"
+solana-transaction = "2.2.1"
+solana-message = "2.2.1"
+solana-sdk-ids = "2.2.1"
+spl-token-2022 = { version = "8.0.1", features = ["no-entrypoint"]}
+solana-rpc-client = "3.0.3"
+solana-address = "1.0.0"
+solana-account = "2.2.1"
 
 
 [lints.rust]
