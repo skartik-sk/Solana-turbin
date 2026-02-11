@@ -12,13 +12,13 @@ pub struct DoUpdateWithVRFCtx<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     #[account(
-
+mut,
         seeds = [b"user", user.key().as_ref()],
         bump = user_account.bump,
     )]
     pub user_account: Account<'info, UserAccount>,
     /// CHECK: The oracle queue
-    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_QUEUE)]
+    #[account(mut  )]
     pub oracle_queue: AccountInfo<'info>,
 }
 

@@ -45,6 +45,13 @@ describe("er-state-account", () => {
     program.programId
   )[0];
 
+  const Queue = new PublicKey(
+  "Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh"
+  )
+  const ERQueue = new PublicKey(
+  "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
+  )
+
   console.log("User Account: ", userAccount.toBase58());
   console.log("Program ID: ", program.programId.toBase58());
   console.log("Provider: ", provider.wallet.publicKey.toBase58());
@@ -82,6 +89,7 @@ describe("er-state-account", () => {
         .accountsPartial({
           user: providerEphemeralRollup.wallet.publicKey,
           userAccount: userAccount,
+          oracleQueue: Queue,
         })
         .rpc({ skipPreflight: true });
       await new Promise((resolve) => setTimeout(resolve, 7000));
@@ -114,37 +122,23 @@ describe("er-state-account", () => {
   });
   it("Update State VRf inside er", async () => {
     try {
-      const ephemeralProgram = new anchor.Program(
+      const eprogram = new anchor.Program(
         program.idl,
         providerEphemeralRollup
       ) as typeof program;
 
-      let tx = await ephemeralProgram.methods
+      let tx = await eprogram.methods
         .requestForRandom(7)
         .accountsPartial({
           user: providerEphemeralRollup.wallet.publicKey,
           userAccount: userAccount,
+          oracleQueue: ERQueue
         })
-        .transaction();
-
-      tx.feePayer = providerEphemeralRollup.wallet.publicKey;
-      tx.recentBlockhash = (
-        await providerEphemeralRollup.connection.getLatestBlockhash()
-      ).blockhash;
-      tx = await providerEphemeralRollup.wallet.signTransaction(tx);
-      const txHash = await providerEphemeralRollup.sendAndConfirm(tx, [], {
-        skipPreflight: true,
-      });
-
-
+        .rpc({ skipPreflight: true });
       await new Promise((resolve) => setTimeout(resolve, 7000));
 
-      const accountInfo =
-        await providerEphemeralRollup.connection.getAccountInfo(userAccount);
-      if (accountInfo) {
-        const randomValue = new anchor.BN(accountInfo.data.slice(40, 48), "le");
-        console.log("  Random value :", randomValue.toString());
-      }
+      const account = await eprogram.account.userAccount.fetch(userAccount);
+      console.log("  Random value :", account.data.toString());
     } catch (error) {
       if (error instanceof SendTransactionError) {
         console.error("\nTransaction failed:", error);
