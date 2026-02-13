@@ -22,8 +22,11 @@ fund-task-queue = "tuktuk -u http://127.0.0.1:8899 task-queue fund --task-queue-
 test-list = "tuktuk -u http://127.0.0.1:8899 task list --task-queue-name future-task"
 
 
-cron = "bun run ts-node cron/cron.ts --cronName remove-old-escrow-cron --queueName escrow-cron --walletPath ~/.config/solana/id.json --rpcUrl http://127.0.0.1:8899"
+cron = "bun run ts-node cron/cron.ts --taskQueue CJv1jLvFSLsV7X1UGq6bHr6XHacbJAfq7Tio8iqpEK6b --weekSeconds 4 --staleSeconds 604800 --batchSize 100"
+cron-once = "bun run ts-node cron/cron.ts --taskQueue CJv1jLvFSLsV7X1UGq6bHr6XHacbJAfq7Tio8iqpEK6b --runOnce true --staleSeconds 604800 --batchSize 100"
 
 cron-list = "tuktuk -u http://127.0.0.1:8899 cron list"
 
 add-queue-authority="tuktuk -u http://127.0.0.1:8899 task-queue add-queue-authority --task-queue-name future-task --queue-authority ALH8UD28X24qwGvG2kpTcogg3Wpvu31FrErpLU8vw6oT"
+
+cron-t-list= "tuktuk -u http://127.0.0.1:8899 cron-transaction list --cron-name "

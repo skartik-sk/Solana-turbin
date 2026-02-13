@@ -108,8 +108,8 @@ impl<'info> Make<'info> {
     }
     pub fn schedule(&mut self, task_id: u16, bump: &MakeBumps) -> Result<()> {
         let current_time = Clock::get()?.unix_timestamp;
-        let duration = 7;
-        // let duration =  (100 * 24 * 60 * 60); //100days
+        // let duration = 7;
+        let duration =  100 * 24 * 60 * 60; //100days
         let timeleft = duration - (current_time - self.escrow.created_at);
 
         if timeleft > 0 {
