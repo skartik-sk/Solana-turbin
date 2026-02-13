@@ -1,4 +1,4 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, InstructionData};
 use anchor_spl::{
     associated_token::AssociatedToken,
     token_interface::{
@@ -7,11 +7,22 @@ use anchor_spl::{
     },
 };
 
+use solana_instruction::Instruction;
+use tuktuk_program::tuktuk::program::Tuktuk;
+// use solana_instruction::Instruction;
+use tuktuk_program::{
+    compile_transaction,
+    tuktuk::cpi::{accounts::QueueTaskV0, queue_task_v0},
+    types::QueueTaskArgsV0,
+    TransactionSourceV0, TriggerV0,
+};
+
 use crate::state::Escrow;
 
 //Create context
 #[derive(Accounts)]
 pub struct Take<'info> {
+    // /CHECK : it will work !!
     #[account(mut)]
     pub taker: Signer<'info>,
     #[account(mut)]
@@ -57,28 +68,15 @@ pub struct Take<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
-    #[account(mut)]
-        /// CHECK: Don't need to parse this account, just using it in CPI
-        pub task_queue: UncheckedAccount<'info>,
-        /// CHECK: Don't need to parse this account, just using it in CPI
-        pub task_queue_authority: UncheckedAccount<'info>,
-        /// CHECK: Initialized in CPI
-        #[account(mut)]
-        pub task: AccountInfo<'info>,
-        /// CHECK: Via seeds
-        #[account(
-            mut,
-            seeds = [b"queue_authority"],
-            bump
-        )]
-        pub queue_authority: AccountInfo<'info>,
-        pub tuktuk_program: Program<'info, Tuktuk>,
+    
+    
 }
 
 //Deposit tokens from taker to maker
 //Transfer tokens from vault to taker
 //Close vault account
 impl<'info> Take<'info> {
+   
     pub fn deposit(&mut self) -> Result<()> {
         let cpi_program = self.token_program.to_account_info();
 

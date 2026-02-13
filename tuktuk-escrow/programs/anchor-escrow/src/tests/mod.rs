@@ -338,7 +338,6 @@ mod tests {
                 mint_b: mint_b,
                 taker_ata_a,
                 taker_ata_b,
-
                 maker_ata_b,
                 escrow: escrow,
                 vault: vault,

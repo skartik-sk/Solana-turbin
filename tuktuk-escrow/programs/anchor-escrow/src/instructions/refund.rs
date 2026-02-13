@@ -8,8 +8,9 @@ use crate::state::Escrow;
 
 #[derive(Accounts)]
 pub struct Refund<'info> {
+    ///CHECK : It will be done automatically. 
     #[account(mut)]
-    maker: Signer<'info>,
+    maker: UncheckedAccount<'info>,
     mint_a: InterfaceAccount<'info, Mint>,
     #[account(
         mut,
