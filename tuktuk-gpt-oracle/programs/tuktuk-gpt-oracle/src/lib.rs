@@ -10,10 +10,10 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("53GFYSJPbrYcaqD3o54z5WCWcCM8WGqixgUjc4nsw2tY");
+declare_id!("GayQidtYDDM43ee5d2vUo5w4LpAbCKNuuyCUrJLRBpSh");
 
 #[program]
-pub mod tuktuk_get_oracle {
+pub mod tuktuk_gpt_oracle {
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
@@ -25,7 +25,7 @@ pub mod tuktuk_get_oracle {
         user_pubkey: Pubkey,
         user_data: String,
     ) -> Result<()> {
-        ctx.accounts.analyse_user(user_pubkey, user_data)
+        ctx.accounts.analyse_user(user_pubkey, user_data, &ctx.bumps)
     }
 
     pub fn callback_from_agent(ctx: Context<CallbackFromAgent>, response: String) -> Result<()> {

@@ -52,7 +52,18 @@ pub struct AnalyzeUser<'info> {
 }
 
 impl<'info> AnalyzeUser<'info> {
-    pub fn analyse_user(&mut self, user_pubkey: Pubkey, user_data: String) -> Result<()> {
+    pub fn analyse_user(
+        &mut self,
+        user_pubkey: Pubkey,
+        user_data: String,
+        bumps: &AnalyzeUserBumps,
+    ) -> Result<()> {
+        // Initialize the AnalysisResult with known values so it's not all zeros
+        self.analysis_result.user = user_pubkey;
+        self.analysis_result.bump = bumps.analysis_result;
+        self.analysis_result.analysis = String::new();
+        self.analysis_result.timestamp = 0;
+
         let cpi_program = self.oracle_program.to_account_info();
 
         let cpi_accounts = InteractWithLlm {
@@ -64,20 +75,19 @@ impl<'info> AnalyzeUser<'info> {
 
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
 
-        // passing the user pubkey as string to the llm
-
-        // let callback_discriminator =
-        //     anchor_lang::solana_program::hash::hash("global:callback_from_agent".as_bytes())
-        //         .to_bytes()[..8]
-        //         .try_into()
-        //         .unwrap();
         let callback_discriminator = instruction::CallbackFromAgent::DISCRIMINATOR
             .try_into()
             .expect("Incorrect discriminator, it should be of 8 bytes");
 
-        // let (analysis_pda, _bump) =
-        //     Pubkey::find_program_address(&[b"analysis", user_pubkey.as_ref()], &crate::ID);
+        // Derive the oracle Identity PDA so the oracle can sign with it in the callback
+        let (identity_pda, _) =
+            Pubkey::find_program_address(&[b"identity"], &solana_gpt_oracle::ID);
 
+        // These metas must match the accounts of CallbackFromAgent in order:
+        // 1. analysis_result (mut) — PDA seeded by ["analysis", user_pubkey]
+        // 2. user_pubkey — the user whose wallet we analyzed
+        // 3. identity — oracle Identity PDA (oracle signs via CPI)
+        // 4. oracle_program — oracle program address (checked by address constraint)
         let metas = vec![
             OracleAccountMeta {
                 pubkey: self.analysis_result.key(),
@@ -85,12 +95,17 @@ impl<'info> AnalyzeUser<'info> {
                 is_writable: true,
             },
             OracleAccountMeta {
-                pubkey: self.payer.key(),
-                is_signer: true,
-                is_writable: true,
+                pubkey: user_pubkey,
+                is_signer: false,
+                is_writable: false,
             },
             OracleAccountMeta {
-                pubkey: anchor_lang::solana_program::system_program::ID,
+                pubkey: identity_pda,
+                is_signer: false,
+                is_writable: false,
+            },
+            OracleAccountMeta {
+                pubkey: solana_gpt_oracle::ID,
                 is_signer: false,
                 is_writable: false,
             },
