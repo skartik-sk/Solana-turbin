@@ -25,6 +25,7 @@ custom-panic = []
 anchor-lang = "0.32.1"
 ephemeral-rollups-sdk = { version = "0.8.5", features = ["anchor"] }
 pyth-solana-receiver-sdk = "1.1.0"
+tuktuk-program = { git = "https://github.com/AvhiMaz/tuktuk", branch = "chore/bump-versions", package = "tuktuk-program" }
 
 
 [lints.rust]

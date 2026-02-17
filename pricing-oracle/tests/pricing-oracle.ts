@@ -1,8 +1,19 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { EphemeralOracle } from "../target/types/ephemeral_oracle";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+import {
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
 import { assert } from "chai";
+import {
+  init,
+  taskKey,
+  taskQueueAuthorityKey,
+  nextAvailableTaskIds,
+} from "@helium/tuktuk-sdk";
 
 describe("pricing-oracle", () => {
   // Configure the client to use the local cluster.
@@ -22,6 +33,19 @@ describe("pricing-oracle", () => {
   let priceFeedPda: PublicKey;
   let priceFeedBump: number;
   let ethPriceFeedPda: PublicKey;
+
+  // Tuktuk scheduler constants
+  const taskQueue = new PublicKey(
+    "CJv1jLvFSLsV7X1UGq6bHr6XHacbJAfq7Tio8iqpEK6b"
+  );
+  const queueAuthority = PublicKey.findProgramAddressSync(
+    [Buffer.from("queue_authority")],
+    program.programId
+  )[0];
+  const taskQueueAuthority = taskQueueAuthorityKey(
+    taskQueue,
+    queueAuthority
+  )[0];
 
   before("Setup test accounts", async () => {
     // Derive PDA for price feed
@@ -72,6 +96,50 @@ describe("pricing-oracle", () => {
       console.log("ETH price feed cleanup skipped:", error.toString());
     }
   });
+
+  // ---------- Helper functions for tuktuk scheduler ----------
+
+  async function fundWithTransfer(to: PublicKey, lamports: number) {
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: provider.publicKey,
+        toPubkey: to,
+        lamports,
+      })
+    );
+    await provider.sendAndConfirm(tx);
+  }
+
+  async function ensureQueueAuthorityInitialized(tuktukProgram: any) {
+    const existing =
+      await tuktukProgram.account.taskQueueAuthorityV0.fetchNullable(
+        taskQueueAuthority
+      );
+    if (!existing) {
+      await tuktukProgram.methods
+        .addQueueAuthorityV0()
+        .accounts({
+          payer: provider.publicKey,
+          queueAuthority,
+          taskQueue,
+        })
+        .rpc();
+    }
+  }
+
+  async function ensureQueueFunding() {
+    const queueAuthorityBalance = await provider.connection.getBalance(
+      queueAuthority
+    );
+    if (queueAuthorityBalance < 20_000_000) {
+      await fundWithTransfer(
+        queueAuthority,
+        20_000_000 - queueAuthorityBalance
+      );
+    }
+  }
+
+  // ---------- Price feed tests ----------
 
   it("Initialize price feed", async () => {
     const tx = await program.methods
@@ -213,5 +281,53 @@ describe("pricing-oracle", () => {
     // This test verifies that the oracle authorization works
     // In test mode, this should succeed
     console.log("Authorization test - test mode allows any payer");
+  });
+
+  // ---------- Tuktuk Scheduler tests ----------
+
+  it("schedule queues a task via tuktuk", async () => {
+    const tuktukProgram = await init(provider);
+    await ensureQueueAuthorityInitialized(tuktukProgram as any);
+    await ensureQueueFunding();
+
+    // Fetch task queue to find an available task ID
+    const taskQueueAccount = await (
+      tuktukProgram.account as any
+    ).taskQueueV0.fetch(taskQueue);
+    const taskId = nextAvailableTaskIds(
+      taskQueueAccount.taskBitmap,
+      1,
+      false
+    )[0];
+    assert.isDefined(taskId, "No free task ID available in task queue");
+
+    // Use the BTC price feed PDA as the price_update account.
+    // It must already be initialized (done by earlier tests).
+    const priceUpdate = priceFeedPda;
+
+    const task = taskKey(taskQueue, taskId)[0];
+
+    const tx = await program.methods
+      .schedule(taskId)
+      .accountsPartial({
+        payer: provider.publicKey,
+        priceUpdate,
+        systemProgram: SystemProgram.programId,
+        taskQueue,
+        taskQueueAuthority,
+        task,
+        queueAuthority,
+        tuktukProgram: tuktukProgram.programId,
+      })
+      .rpc();
+
+    console.log("Schedule transaction:", tx);
+
+    // Verify the task was created in the task queue
+    const queuedTask = await (
+      tuktukProgram.account as any
+    ).taskV0.fetchNullable(task);
+    assert.isNotNull(queuedTask, "Task should be queued after schedule");
+    console.log("Task queued successfully with ID:", taskId);
   });
 });
