@@ -36,4 +36,8 @@ pub mod tuktuk_gpt_oracle {
     pub fn get_analysis(ctx: Context<GetAnalysis>) -> Result<String> {
         ctx.accounts.get_analysis()
     }
+    
+    pub fn schedule(ctx: Context<Schedule>, user_pubkey: Pubkey, user_data: String,task_id: u16, seed: u64) -> Result<()> {
+        ctx.accounts.schedule(user_pubkey,user_data,task_id,seed, &ctx.bumps)
+    }
 }

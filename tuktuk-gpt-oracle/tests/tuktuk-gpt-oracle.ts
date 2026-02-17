@@ -4,6 +4,18 @@ import { assert } from "chai";
 import { TuktukGptOracle } from "../target/types/tuktuk_gpt_oracle";
 import { SolanaGptOracle } from "../app/solana-gpt-oracle";
 import IDL_LLM from "../app/solana-gpt-oracle.json";
+import {
+  init,
+  taskKey,
+  taskQueueAuthorityKey,
+  nextAvailableTaskIds,
+} from "@helium/tuktuk-sdk";
+import {
+  PublicKey,
+  Transaction,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
 
 describe("tuktuk-gpt-oracle", () => {
   // ============================================================
@@ -13,8 +25,7 @@ describe("tuktuk-gpt-oracle", () => {
   anchor.setProvider(provider);
 
   // Our program (loaded via anchor workspace)
-  const program = anchor.workspace
-    .TuktukGptOracle as Program<TuktukGptOracle>;
+  const program = anchor.workspace.TuktukGptOracle as Program<TuktukGptOracle>;
 
   // Oracle program — instantiated from the LLM oracle IDL JSON
   const ORACLE_PROGRAM_ID = new web3.PublicKey(
@@ -52,13 +63,76 @@ describe("tuktuk-gpt-oracle", () => {
   // Helpers
   // ============================================================
 
+  // ============================================================
+  // TukTuk Scheduler Constants
+  // ============================================================
+
+  const taskQueue = new web3.PublicKey(
+    "CJv1jLvFSLsV7X1UGq6bHr6XHacbJAfq7Tio8iqpEK6b"
+  );
+  const queueAuthority = web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("queue_authority")],
+    program.programId
+  )[0];
+  const taskQueueAuthorityPda = taskQueueAuthorityKey(
+    taskQueue,
+    queueAuthority
+  )[0];
+
+  let scheduleSeedNonce = Date.now();
+  function freshScheduleSeed(): number {
+    scheduleSeedNonce += 1;
+    return scheduleSeedNonce;
+  }
+
+  async function fundWithTransfer(to: web3.PublicKey, lamports: number) {
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: provider.publicKey,
+        toPubkey: to,
+        lamports,
+      })
+    );
+    await provider.sendAndConfirm(tx);
+  }
+
+  async function ensureQueueAuthorityInitialized(tuktukProgram: any) {
+    const existing =
+      await tuktukProgram.account.taskQueueAuthorityV0.fetchNullable(
+        taskQueueAuthorityPda
+      );
+    if (!existing) {
+      await tuktukProgram.methods
+        .addQueueAuthorityV0()
+        .accounts({
+          payer: provider.publicKey,
+          queueAuthority,
+          taskQueue,
+        })
+        .rpc();
+    }
+  }
+
+  async function ensureQueueFunding() {
+    const queueAuthorityBalance = await provider.connection.getBalance(
+      queueAuthority
+    );
+    if (queueAuthorityBalance < 20_000_000) {
+      await fundWithTransfer(
+        queueAuthority,
+        20_000_000 - queueAuthorityBalance
+      );
+    }
+  }
+
+  // ============================================================
+  // Helpers
+  // ============================================================
+
   /** Derive oracle ContextAccount PDA: seeds = ["test-context", count_le_u32] */
   const deriveContextPda = (count: number): web3.PublicKey => {
     return web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("test-context"),
-        new BN(count).toArrayLike(Buffer, "le", 4),
-      ],
+      [Buffer.from("test-context"), new BN(count).toArrayLike(Buffer, "le", 4)],
       ORACLE_PROGRAM_ID
     )[0];
   };
@@ -79,11 +153,7 @@ describe("tuktuk-gpt-oracle", () => {
     contextAccount: web3.PublicKey
   ): web3.PublicKey => {
     return web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("interaction"),
-        payer.toBuffer(),
-        contextAccount.toBuffer(),
-      ],
+      [Buffer.from("interaction"), payer.toBuffer(), contextAccount.toBuffer()],
       ORACLE_PROGRAM_ID
     )[0];
   };
@@ -254,10 +324,7 @@ describe("tuktuk-gpt-oracle", () => {
         contextAccountPda
       );
 
-      console.log(
-        "  User to analyze    :",
-        userToAnalyze.publicKey.toBase58()
-      );
+      console.log("  User to analyze    :", userToAnalyze.publicKey.toBase58());
       console.log("  Analysis result PDA:", analysisResultPda.toBase58());
       console.log("  Interaction PDA    :", interactionPda.toBase58());
 
@@ -311,7 +378,8 @@ describe("tuktuk-gpt-oracle", () => {
 
       console.log("  Analysis result account:", {
         user: analysisResult.user.toBase58(),
-        analysis: analysisResult.analysis || "(empty — awaiting oracle callback)",
+        analysis:
+          analysisResult.analysis || "(empty — awaiting oracle callback)",
         timestamp: analysisResult.timestamp.toString(),
         bump: analysisResult.bump,
       });
@@ -324,10 +392,7 @@ describe("tuktuk-gpt-oracle", () => {
         interactionInfo,
         "Interaction account should exist on oracle program"
       );
-      console.log(
-        "  Interaction created:",
-        interactionInfo ? "YES" : "NO"
-      );
+      console.log("  Interaction created:", interactionInfo ? "YES" : "NO");
     });
 
     it("re-submits for the same user (init_if_needed is idempotent)", async () => {
@@ -591,6 +656,173 @@ describe("tuktuk-gpt-oracle", () => {
   });
 
   // ============================================================
+  // 7. SCHEDULE (TukTuk Scheduler Integration)
+  // ============================================================
+
+  describe("7. Schedule", () => {
+    it("schedules an analyze_user task via tuktuk", async () => {
+      const tuktukProgram = await init(provider);
+      await ensureQueueAuthorityInitialized(tuktukProgram as any);
+      await ensureQueueFunding();
+
+      // Get the next available task ID from the task queue bitmap
+      const taskQueueAccount = await (
+        tuktukProgram.account as any
+      ).taskQueueV0.fetch(taskQueue);
+      const taskId = nextAvailableTaskIds(
+        taskQueueAccount.taskBitmap,
+        1,
+        false
+      )[0];
+      assert.isDefined(taskId, "No free task ID available in task queue");
+
+      // Reload the agent to get the context address
+      const agentAccount = await program.account.agent.fetch(agentPda);
+      const ctxPda = agentAccount.context;
+
+      const userToSchedule = web3.Keypair.generate();
+      const analysisResultPda = deriveAnalysisResultPda(
+        userToSchedule.publicKey
+      );
+      const interactionPda = deriveInteractionPda(
+        provider.wallet.publicKey,
+        ctxPda
+      );
+
+      const seed = freshScheduleSeed();
+
+      console.log("  Task ID             :", taskId);
+      console.log(
+        "  User to schedule    :",
+        userToSchedule.publicKey.toBase58()
+      );
+      console.log("  Analysis result PDA :", analysisResultPda.toBase58());
+      console.log("  Interaction PDA     :", interactionPda.toBase58());
+      console.log("  Queue authority     :", queueAuthority.toBase58());
+      console.log("  Seed                :", seed);
+
+      const tx = await program.methods
+        .schedule(
+          userToSchedule.publicKey,
+          JSON.stringify({
+            recentTransactions: [
+              {
+                type: "swap",
+                amount: 20,
+                from: "SOL",
+                to: "USDC",
+                protocol: "Jupiter",
+              },
+            ],
+            balances: { SOL: 10.0, USDC: 500 },
+            walletAge: "3 months",
+          }),
+          taskId,
+          new anchor.BN(seed)
+        )
+        .accountsPartial({
+          payer: provider.publicKey,
+          interaction: interactionPda,
+          agent: agentPda,
+          contextAccount: ctxPda,
+          oracleProgram: ORACLE_PROGRAM_ID,
+          analysisResult: analysisResultPda,
+          systemProgram: SystemProgram.programId,
+          taskQueue,
+          taskQueueAuthority: taskQueueAuthorityPda,
+          task: taskKey(taskQueue, taskId)[0],
+          queueAuthority,
+          tuktukProgram: tuktukProgram.programId,
+        })
+        .rpc({ skipPreflight: true });
+
+      await confirmTx(tx);
+      console.log("  Schedule tx:", tx);
+
+      // Verify the analysis result account was created (init_if_needed)
+      const analysisResult = await program.account.analysisResult.fetch(
+        analysisResultPda
+      );
+      assert.ok(
+        analysisResult.user.equals(userToSchedule.publicKey),
+        "Analysis result user should match the scheduled user"
+      );
+      assert.isNumber(analysisResult.bump, "bump should be a number");
+      assert.isAbove(analysisResult.bump, 0, "bump should be non-zero");
+      console.log("  Analysis result account:", {
+        user: analysisResult.user.toBase58(),
+        analysis:
+          analysisResult.analysis || "(empty — awaiting oracle callback)",
+        timestamp: analysisResult.timestamp.toString(),
+        bump: analysisResult.bump,
+      });
+
+      // Verify the task was queued in tuktuk
+      const queuedTask = await (
+        tuktukProgram.account as any
+      ).taskV0.fetchNullable(taskKey(taskQueue, taskId)[0]);
+      assert.isNotNull(queuedTask, "Task should be queued by schedule");
+      console.log("  Task queued:", queuedTask ? "YES" : "NO");
+    });
+
+    it("fails to schedule with an invalid task queue", async () => {
+      const tuktukProgram = await init(provider);
+
+      const agentAccount = await program.account.agent.fetch(agentPda);
+      const ctxPda = agentAccount.context;
+
+      const userToSchedule = web3.Keypair.generate();
+      const analysisResultPda = deriveAnalysisResultPda(
+        userToSchedule.publicKey
+      );
+      const interactionPda = deriveInteractionPda(
+        provider.wallet.publicKey,
+        ctxPda
+      );
+
+      const seed = freshScheduleSeed();
+      const fakeTaskQueue = web3.Keypair.generate().publicKey;
+      const fakeTaskQueueAuthority = taskQueueAuthorityKey(
+        fakeTaskQueue,
+        queueAuthority
+      )[0];
+
+      try {
+        await program.methods
+          .schedule(
+            userToSchedule.publicKey,
+            "Some user data",
+            0,
+            new anchor.BN(seed)
+          )
+          .accountsPartial({
+            payer: provider.publicKey,
+            interaction: interactionPda,
+            agent: agentPda,
+            contextAccount: ctxPda,
+            oracleProgram: ORACLE_PROGRAM_ID,
+            analysisResult: analysisResultPda,
+            systemProgram: SystemProgram.programId,
+            taskQueue: fakeTaskQueue,
+            taskQueueAuthority: fakeTaskQueueAuthority,
+            task: taskKey(fakeTaskQueue, 0)[0],
+            queueAuthority,
+            tuktukProgram: tuktukProgram.programId,
+          })
+          .rpc();
+
+        assert.fail("Should have thrown — invalid task queue");
+      } catch (e: any) {
+        console.log(
+          "  Expected error (invalid task queue):",
+          e.message?.substring(0, 160)
+        );
+        assert.ok(e, "Should fail with an invalid task queue");
+      }
+    });
+  });
+
+  // ============================================================
   // 6. ACCOUNT DATA INTEGRITY
   // ============================================================
 
@@ -644,11 +876,11 @@ describe("tuktuk-gpt-oracle", () => {
         console.log(`    PDA      : ${acct.publicKey.toBase58()}`);
         console.log(`    User     : ${acct.account.user.toBase58()}`);
         console.log(
-          `    Analysis : ${acct.account.analysis || "(empty — awaiting callback)"}`
+          `    Analysis : ${
+            acct.account.analysis || "(empty — awaiting callback)"
+          }`
         );
-        console.log(
-          `    Timestamp: ${acct.account.timestamp.toString()}`
-        );
+        console.log(`    Timestamp: ${acct.account.timestamp.toString()}`);
         console.log(`    Bump     : ${acct.account.bump}`);
         console.log();
       }

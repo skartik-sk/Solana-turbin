@@ -11,8 +11,9 @@ use solana_gpt_oracle::{
 #[derive(Accounts)]
 #[instruction(user_pubkey: Pubkey, user_data: String)]
 pub struct AnalyzeUser<'info> {
+     /// CHECK: For tuk tuk 
     #[account(mut)]
-    pub payer: Signer<'info>,
+    pub payer: UncheckedAccount<'info>,
 
     /// CHECK: Correct interaction account
     #[account(
