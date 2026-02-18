@@ -1,0 +1,10 @@
+[package]
+name = "ch1"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+borsh = "1.6.0"
+serde = "1.0.228"
+serde_json = "1.0.149"
+wincode = "0.4.4"
