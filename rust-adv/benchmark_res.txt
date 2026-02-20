@@ -1,0 +1,14 @@
+
+running 9 tests
+test for_borsh ... ignored
+test for_serde ... ignored
+test for_wincode ... ignored
+test bench_borsh_serialize     ... bench:         324.49 ns/iter (+/- 7.71)
+test bench_borsh_deserialize   ... bench:         175.84 ns/iter (+/- 3.82)
+test bench_json_serialize      ... bench:         739.06 ns/iter (+/- 26.75)
+test bench_json_deserialize    ... bench:         220.01 ns/iter (+/- 6.45)
+test bench_wincode_serialize   ... bench:         377.90 ns/iter (+/- 62.07)
+test bench_wincode_deserialize ... bench:         182.35 ns/iter (+/- 22.18)
+
+test result: ok. 0 passed; 0 failed; 3 ignored; 6 measured; 0 filtered out; finished in 21.71s
+

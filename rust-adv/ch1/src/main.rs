@@ -1,10 +1,15 @@
-use std::{error::Error, marker::PhantomData};
+
+#![feature(test)]
+
+extern crate test;
+use std::{ error::Error, fmt::Debug as db, marker::PhantomData};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use wincode::{SchemaRead, SchemaWrite, config::DefaultConfig};
 
-trait Serializer<T> {
+pub trait Serializer<T: db> {
+    fn name(&self) -> &'static str;
     fn to_bytes(&self, value: &T) -> Result<Vec<u8>, Box<dyn Error>>;
     fn from_bytes(&self, bytes: &[u8]) -> Result<T, Box<dyn Error>>;
 }
@@ -13,7 +18,7 @@ struct Borsh;
 struct Wincode;
 struct Json;
 
-impl<T: BorshDeserialize + BorshSerialize> Serializer<T> for Borsh {
+impl<T: db + BorshDeserialize + BorshSerialize> Serializer<T> for Borsh {
     fn to_bytes(&self, value: &T) -> Result<Vec<u8>, Box<dyn Error>> {
         borsh::to_vec(value).map_err(|e| e.into())
     }
@@ -21,9 +26,13 @@ impl<T: BorshDeserialize + BorshSerialize> Serializer<T> for Borsh {
     fn from_bytes(&self, bytes: &[u8]) -> Result<T, Box<dyn Error>> {
         borsh::from_slice(bytes).map_err(|e| e.into())
     }
+
+    fn name(&self) -> &'static str {
+        "Borsh"
+    }
 }
 
-impl<T: Serialize + DeserializeOwned> Serializer<T> for Json {
+impl<T: db + Serialize + DeserializeOwned> Serializer<T> for Json {
     fn to_bytes(&self, value: &T) -> Result<Vec<u8>, Box<dyn Error>> {
         serde_json::to_vec(value).map_err(|e| e.into())
     }
@@ -31,9 +40,13 @@ impl<T: Serialize + DeserializeOwned> Serializer<T> for Json {
     fn from_bytes(&self, bytes: &[u8]) -> Result<T, Box<dyn Error>> {
         serde_json::from_slice(bytes).map_err(|e| e.into())
     }
+
+    fn name(&self) -> &'static str {
+        "Serde_Json"
+    }
 }
 
-impl<T: SchemaWrite<DefaultConfig, Src = T> + for<'de> SchemaRead<'de, DefaultConfig, Dst = T>>
+impl<T: db + SchemaWrite<DefaultConfig, Src = T> + for<'de> SchemaRead<'de, DefaultConfig, Dst = T>>
     Serializer<T> for Wincode
 {
     fn to_bytes(&self, value: &T) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -43,6 +56,10 @@ impl<T: SchemaWrite<DefaultConfig, Src = T> + for<'de> SchemaRead<'de, DefaultCo
     fn from_bytes(&self, bytes: &[u8]) -> Result<T, Box<dyn Error>> {
         wincode::deserialize(bytes).map_err(|e| e.into())
     }
+
+    fn name(&self) -> &'static str {
+        "WinCode"
+    }
 }
 
 pub struct Storage<T, S> {
@@ -51,7 +68,7 @@ pub struct Storage<T, S> {
     _type: PhantomData<T>,
 }
 
-impl<T, S: Serializer<T>> Storage<T, S> {
+impl<T: db, S: Serializer<T>> Storage<T, S> {
     pub fn new(serializer: S) -> Self {
         Storage {
             data: None,
@@ -61,13 +78,17 @@ impl<T, S: Serializer<T>> Storage<T, S> {
     }
     pub fn save(&mut self, value: &T) -> Result<(), Box<dyn Error>> {
         let bytes = self.serializer.to_bytes(value)?;
-        
+        println!("to_bytes {:?} : \n  {:?}", self.serializer.name(), bytes);
         self.data = Some(bytes);
         Ok(())
     }
     pub fn load(&self) -> Result<T, Box<dyn Error>> {
         match &self.data {
-            Some(data) => self.serializer.from_bytes(data),
+            Some(data) => {
+                let obj = self.serializer.from_bytes(data);
+                println!("From_bytes {:?} : \n  {:?}", self.serializer.name(), obj);
+                obj
+            }
             None => Err("no data".into()),
         }
 
@@ -79,7 +100,16 @@ impl<T, S: Serializer<T>> Storage<T, S> {
 }
 
 //5 pending
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Debug,SchemaWrite ,  SchemaRead)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Debug,
+    SchemaWrite,
+    SchemaRead,
+)]
 struct Person {
     pub color_hex: String,
     pub fav_num: u64,
@@ -88,10 +118,10 @@ struct Person {
 //\/\/\/\/\/\/\/\Test/\/\/\/\/\/\/\
 
 #[test]
-fn for_borsh() {
+pub fn for_borsh() {
     let per = Person {
-        color_hex: "ffffff".to_string(),
-        fav_num: 7,
+        color_hex: "ffffff/000000".to_string(),
+        fav_num: 6,
     };
     let mut st = Storage::new(Borsh);
     assert_eq!(st.has_data(), false);
@@ -100,10 +130,10 @@ fn for_borsh() {
 }
 
 #[test]
-fn for_serde() {
+pub fn for_serde() {
     let per = Person {
-        color_hex: "ffffff".to_string(),
-        fav_num: 7,
+        color_hex: "ffffff/000000".to_string(),
+        fav_num: 6,
     };
     let mut st = Storage::new(Json);
     assert_eq!(st.has_data(), false);
@@ -112,51 +142,136 @@ fn for_serde() {
 }
 
 #[test]
-fn for_wincode() {
+pub fn for_wincode() {
     let per = Person {
-        color_hex: "ffffff".to_string(),
-        fav_num: 7,
+        color_hex: "ffffff/000000".to_string(),
+        fav_num: 6,
     };
     let mut st = Storage::new(Wincode);
     assert_eq!(st.has_data(), false);
     st.save(&per).unwrap();
     assert_eq!(st.load().unwrap(), per)
 }
+
+
+//\/\/\/\//\\/\\\/\\/ bench \/\/\/\/\/\/\
+
+#[bench]
+fn bench_borsh_serialize(b: &mut test::Bencher) {
+    let per = Person {
+        color_hex: "ffffff".to_string(),
+        fav_num: 702496809348,
+    };
+    
+    b.iter(|| {            
+        let mut storage = Storage::new(Borsh);
+        storage.save(&per).unwrap();
+
+    });
+}
+
+
+
+#[bench]
+fn bench_json_serialize(b: &mut test::Bencher) {
+    let per = Person {
+        color_hex: "ffffff".to_string(),
+        fav_num: 702496809348,
+    };
+    
+    b.iter(|| {
+
+        let mut storage = Storage::new(Json);
+        storage.save(&per).unwrap();
+
+    });
+    
+            
+       
+}
+
+#[bench]
+fn bench_wincode_serialize(b: &mut test::Bencher) {
+    let per = Person {
+        color_hex: "ffffff".to_string(),
+        fav_num: 702496809348,
+    };
+    
+    b.iter(|| {
+            
+        let mut storage = Storage::new(Wincode);
+        storage.save(&per).unwrap();
+
+    });
+    
+            
+       
+}
+
+
+#[bench]
+fn bench_borsh_deserialize(b: &mut test::Bencher) {
+    let per = Person {
+        color_hex: "ffffff".to_string(),
+        fav_num: 702496809348,
+    };
+    
+    let mut storage = Storage::new(Borsh);
+    storage.save(&per).unwrap();
+    
+    b.iter(|| {
+
+        storage.load().unwrap();
+    })
+}
+
+#[bench]
+fn bench_json_deserialize(b: &mut test::Bencher) {
+    let per = Person {
+        color_hex: "ffffff".to_string(),
+        fav_num: 702496809348,
+    };
+    
+    let mut storage = Storage::new(Json);
+    storage.save(&per).unwrap();
+    
+    b.iter(|| {
+
+        storage.load().unwrap();
+    })
+}
+
+#[bench]
+fn bench_wincode_deserialize(b: &mut test::Bencher) {
+    let per = Person {
+        color_hex: "ffffff".to_string(),
+        fav_num: 702496809348,
+    };
+    
+    let mut storage = Storage::new(Wincode);
+    storage.save(&per).unwrap();
+
+    
+
+    b.iter(|| {            
+        storage.load().unwrap();
+
+    })
+}
+
 /*
 *
 
 
-
-6. Write Tests
-Create unit tests that verify:
-• Data can be saved and loaded with Borsh
-• Data can be saved and loaded with Wincode
-• Data can be saved and loaded with JSON
-• Loaded data matches the original data
-Learning Goals
-By completing this challenge, you should understand:
-• How to design and implement generic traits
-• How to use PhantomData for zero-cost type tracking
-• How trait bounds work with multiple serialization libraries
-• The differences between various serialization formats
-• Error handling with Result types
-• How to write generic code that works with different implementations
 Bonus Challenges (Optional)
 If you want to extend the challenge:
 1 Add a method to convert between different serializers
-2 Add benchmarks to compare serialization performance
-Expected Output
-Your program should be able to run something like:
 
-rust
-let person = Person { name: "André".to_string(), age: 30 };
-let mut borsh_storage = Storage::new(Borsh);
-borsh_storage.save(&person).unwrap();
-let loaded = borsh_storage.load().unwrap();
-println!("Loaded: {:?}", loaded);
-And successfully save/load data using all three serialization formats.
 */
 
 fn main() {
-    println!("Hello, world!");
+    println!("Serialize and deserialize!");
+    // for_borsh();
+    // for_serde();
+    // for_wincode();
 }
