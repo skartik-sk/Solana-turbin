@@ -9,7 +9,7 @@ use pinocchio_token::instructions::{CloseAccount, Transfer};
 
 use crate::{state::Escrow1, util::ATA};
 
-pub fn process_take_instruction(accounts: &[AccountView], _data: &[u8]) -> ProgramResult {
+pub fn process_takev2_instruction(accounts: &[AccountView], _data: &[u8]) -> ProgramResult {
     let [taker, _maker, _mint_a, _mint_b, escrow_account, taker_ata_b, taker_ata_a, maker_ata_b, escrow_ata, system_program, token_program, _associated_token_program @ ..] =
         accounts
     else {
@@ -25,17 +25,19 @@ pub fn process_take_instruction(accounts: &[AccountView], _data: &[u8]) -> Progr
     //     pub bump: u8,
     // }
     //[start..end)
-    let (maker, mint_a, mint_b, amount_to_receive, amount_to_give, bump) = {
-           let escrow_data = escrow_account.try_borrow_mut()?;
-           let maker: [u8; 32]          = escrow_data[0..32].try_into().unwrap();
-           let mint_a: [u8; 32]         = escrow_data[32..64].try_into().unwrap();
-           let mint_b: [u8; 32]         = escrow_data[64..96].try_into().unwrap();
-           let amount_to_receive: [u8; 8] = escrow_data[96..104].try_into().unwrap();
-           let amount_to_give: [u8; 8]  = escrow_data[104..112].try_into().unwrap();
-           let bump: u8                 = escrow_data[112];
-           // escrow_data drops here — borrow released BEFORE any CPIs
-           (maker, mint_a, mint_b, amount_to_receive, amount_to_give, bump)
-       };
+    let escrow: Escrow1 = {
+            let escrow_data = escrow_account.try_borrow_mut()?;
+            wincode::deserialize::<Escrow1>(&*escrow_data)
+                .map_err(|_| ProgramError::InvalidAccountData)?
+        };
+    
+        let maker           = escrow._maker();
+        let mint_a          = escrow._mint_a();
+        let mint_b          = escrow._mint_b();
+        let amount_to_receive = escrow._amount_to_receive();
+        let amount_to_give  = escrow._amount_to_give();
+        let bump            = escrow.bump;
+
 
     if (_mint_a.address().as_ref() != mint_a.as_ref())
         || (_mint_b.address().as_ref() != mint_b.as_ref())
@@ -97,7 +99,7 @@ pub fn process_take_instruction(accounts: &[AccountView], _data: &[u8]) -> Progr
         from: &taker_ata_b,
         to: &maker_ata_b,
         authority: &taker,
-        amount: u64::from_le_bytes(amount_to_receive),
+        amount: amount_to_receive,
     }
     .invoke()?;
 
@@ -106,7 +108,7 @@ pub fn process_take_instruction(accounts: &[AccountView], _data: &[u8]) -> Progr
         from: &escrow_ata,
         to: &taker_ata_a,
         authority: &escrow_account,
-        amount: u64::from_le_bytes(amount_to_give),
+        amount: (amount_to_give),
     }
     .invoke_signed(&[seeds.clone()])?;
 

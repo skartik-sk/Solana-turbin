@@ -324,6 +324,9 @@ mod tests {
         println!("\n\n Take transaction sucessfull");
         println!("CUs Consumed: {}", tx.compute_units_consumed);
     }
+    
+    
+    
     #[test]
     pub fn test_cancel_instruction() {
         let (mut svm, payer, taker) = setup();
@@ -425,6 +428,200 @@ mod tests {
         let recent_blockhash = svm.latest_blockhash();
 
         let transaction = Transaction::new(&[&payer], message, recent_blockhash);
+
+        // Send the transaction and capture the result
+        let tx = svm.send_transaction(transaction).unwrap();
+
+        // Log transaction details
+        println!("\n\n Take transaction sucessfull");
+        println!("CUs Consumed: {}", tx.compute_units_consumed);
+    }
+    
+    
+    
+    
+    
+    
+    #[test]
+    pub fn test_makev2_instruction() {
+        let (mut svm, payer, taker) = setup();
+
+        let (
+            program_id,
+            mint_a,
+            mint_b,
+            maker_ata_a,
+            maker_ata_b,
+            taker_ata_a,
+            taker_ata_b,
+            escrow,
+            vault,
+            system_program,
+            token_program,
+            associated_token_program,
+        ) = helper(&mut svm, &payer, &taker);
+
+        // Mint 1,000 tokens (with 6 decimal places) of Mint A to the maker's associated token account
+        MintTo::new(&mut svm, &payer, &mint_a, &maker_ata_a, 1000000000)
+            .send()
+            .unwrap();
+
+        let amount_to_receive: u64 = 100000000; // 100 tokens with 6 decimal places
+        let amount_to_give: u64 = 500000000; // 500 tokens with 6 decimal places
+        let bump: u8 = escrow.1;
+
+        println!("Bump: {}", bump);
+
+        // Create the "Make" instruction to deposit tokens into the escrow
+        let make_data = [
+            vec![3u8], // Discriminator for "Make" instruction
+            bump.to_le_bytes().to_vec(),
+            amount_to_receive.to_le_bytes().to_vec(),
+            amount_to_give.to_le_bytes().to_vec(),
+        ]
+        .concat();
+        let make_ix = Instruction {
+            program_id: program_id,
+            accounts: vec![
+                AccountMeta::new(payer.pubkey(), true),
+                AccountMeta::new(mint_a, false),
+                AccountMeta::new(mint_b, false),
+                AccountMeta::new(escrow.0, false),
+                AccountMeta::new(maker_ata_a, false),
+                AccountMeta::new(vault, false),
+                AccountMeta::new(system_program, false),
+                AccountMeta::new(token_program, false),
+                AccountMeta::new(associated_token_program, false),
+            ],
+            data: make_data,
+        };
+
+        // Create and send the transaction containing the "Make" instruction
+        let message = Message::new(&[make_ix], Some(&payer.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+
+        let transaction = Transaction::new(&[&payer], message, recent_blockhash);
+
+        // Send the transaction and capture the result
+        let tx = svm.send_transaction(transaction).unwrap();
+
+        // Log transaction details
+        println!("\n\nMake transaction sucessfull");
+        println!("CUs Consumed: {}", tx.compute_units_consumed);
+    }
+
+    #[test]
+    pub fn test_takev2_instruction() {
+        let (mut svm, payer, taker) = setup();
+
+        let (
+            program_id,
+            mint_a,
+            mint_b,
+            maker_ata_a,
+            maker_ata_b,
+            taker_ata_a,
+            taker_ata_b,
+            escrow,
+            vault,
+            system_program,
+            token_program,
+            associated_token_program,
+        ) = helper(&mut svm, &payer, &taker);
+
+        //---------------------Make----------------------------
+
+        // Mint 1,000 tokens (with 6 decimal places) of Mint A to the maker's associated token account
+        MintTo::new(&mut svm, &payer, &mint_a, &maker_ata_a, 1000000000)
+            .send()
+            .unwrap();
+
+        let amount_to_receive: u64 = 100000000; // 100 tokens with 6 decimal places
+        let amount_to_give: u64 = 500000000; // 500 tokens with 6 decimal places
+        let bump: u8 = escrow.1;
+
+        println!("Bump: {}", bump);
+
+        // Create the "Make" instruction to deposit tokens into the escrow
+        let make_data = [
+            vec![3u8], // Discriminator for "Make" instruction
+            bump.to_le_bytes().to_vec(),
+            amount_to_receive.to_le_bytes().to_vec(),
+            amount_to_give.to_le_bytes().to_vec(),
+        ]
+        .concat();
+        let make_ix = Instruction {
+            program_id: program_id,
+            accounts: vec![
+                AccountMeta::new(payer.pubkey(), true),
+                AccountMeta::new(mint_a, false),
+                AccountMeta::new(mint_b, false),
+                AccountMeta::new(escrow.0, false),
+                AccountMeta::new(maker_ata_a, false),
+                AccountMeta::new(vault, false),
+                AccountMeta::new(system_program, false),
+                AccountMeta::new(token_program, false),
+                AccountMeta::new(associated_token_program, false),
+            ],
+            data: make_data,
+        };
+
+        // Create and send the transaction containing the "Make" instruction
+        let message = Message::new(&[make_ix], Some(&payer.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+
+        let transaction = Transaction::new(&[&payer], message, recent_blockhash);
+
+        // Send the transaction and capture the result
+        let tx = svm.send_transaction(transaction).unwrap();
+
+        // Log transaction details
+        println!("\n\nMake transaction sucessfull");
+        println!("CUs Consumed: {}", tx.compute_units_consumed);
+        // assert_eq!(svm.get_balance(&maker_ata_a),)
+
+        //---------------------Take----------------------------
+
+        // Mint 1,000 tokens (with 6 decimal places) of Mint A to the maker's associated token account
+        MintTo::new(&mut svm, &payer, &mint_b, &taker_ata_b, 1000000000)
+            .send()
+            .unwrap();
+        let bump: u8 = escrow.1;
+
+        println!("Bump: {}", bump);
+
+        // Create the "Make" instruction to deposit tokens into the escrow
+        let take_data = [
+            vec![4u8], // Discriminator for "Make" instruction
+                       // bump.to_le_bytes().to_vec(),
+                       // amount_to_receive.to_le_bytes().to_vec(),
+                       // amount_to_give.to_le_bytes().to_vec(),
+        ]
+        .concat();
+        let take_ix = Instruction {
+            program_id: program_id,
+            accounts: vec![
+                AccountMeta::new(taker.pubkey(), true),
+                AccountMeta::new(payer.pubkey(), false),
+                AccountMeta::new(mint_a, false),
+                AccountMeta::new(mint_b, false),
+                AccountMeta::new(escrow.0, false),
+                AccountMeta::new(taker_ata_b, false),
+                AccountMeta::new(taker_ata_a, false),
+                AccountMeta::new(maker_ata_b, false),
+                AccountMeta::new(vault, false),
+                AccountMeta::new(system_program, false),
+                AccountMeta::new(token_program, false),
+                AccountMeta::new(associated_token_program, false),
+            ],
+            data: take_data,
+        };
+
+        // Create and send the transaction containing the "Make" instruction
+        let message = Message::new(&[take_ix], Some(&taker.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+
+        let transaction = Transaction::new(&[&taker], message, recent_blockhash);
 
         // Send the transaction and capture the result
         let tx = svm.send_transaction(transaction).unwrap();

@@ -54,7 +54,7 @@ pub fn process_cancel_instruction(accounts: &[AccountView], _data: &[u8]) -> Pro
     }
     .invoke_signed(&[seeds.clone()])?;
 
-    CloseAccount {
+    CloseAccount {  
         account: escrow_ata,
         destination: maker,
         authority: escrow_account,
