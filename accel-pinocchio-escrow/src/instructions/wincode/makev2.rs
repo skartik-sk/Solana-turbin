@@ -55,26 +55,21 @@ pub fn process_makev2_instruction(accounts: &[AccountView], data: &[u8]) -> Prog
             }
             .invoke_signed(&[seeds.clone()])?;
 
-            {
-                let escrow1_state = Escrow1::from_account_info(escrow1_account)?;
-                // wincode::serialize(&Escrow1{maker:maker.address().as_array(),
-                //     mint_a:mint_a.address().as_array(),
-                //     mint_b:mint_b.address().as_array(),
-                //     amount_to_receive:amount_to_receive.to_le_bytes(),
-                //     amount_to_give:amount_to_give.to_le_bytes(),
-                //     bump:data[0]
-                // });
-                escrow1_state.set_maker(maker.address());
-                escrow1_state.set_mint_a(mint_a.address());
-                escrow1_state.set_mint_b(mint_b.address());
-                escrow1_state.set_amount_to_receive(amount_to_receive);
-                escrow1_state.set_amount_to_give(amount_to_give);
-                escrow1_state.bump = data[0];
-            }
+            
         } else {
             return Err(ProgramError::IllegalOwner);
         }
     }
+    let mut dummy = Escrow1::default();
+       dummy.set_inner(
+           escrow1_account,
+           maker.address(),
+           mint_a.address(),
+           mint_b.address(),
+           amount_to_receive.to_le_bytes(),
+           amount_to_give.to_le_bytes(),
+           data[0],
+       )?;
 
     pinocchio_associated_token_account::instructions::Create {
         funding_account: maker,

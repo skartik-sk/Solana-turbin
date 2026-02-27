@@ -14,6 +14,10 @@ pinocchio-pubkey = { git = "https://github.com/anza-xyz/pinocchio.git" }
 pinocchio-log = "0.5.1"
 pinocchio-associated-token-account = "0.3.0"
 wincode ={version= "0.4.4",features = ["derive"]}
+bytemuck = { version = "1.25.0", features = ["derive"] }
+serde = {version="1.0.228",features = ["derive"]}
+serde_json = {version="1.0.149"}
+borsh = { version = "1.6.0", features = ["derive"] }
 
 [dev-dependencies]
 litesvm = "0.9.1"

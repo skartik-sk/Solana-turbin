@@ -29,6 +29,12 @@ pub fn process_instruction(
         EscrowInstrctions::Cancel => instructions::process_cancel_instruction(accounts, data)?,
         EscrowInstrctions::MakeV2 => instructions::process_makev2_instruction(accounts, data)?,
         EscrowInstrctions::TakeV2 => instructions::process_takev2_instruction(accounts, data)?,
+        EscrowInstrctions::MakeV3 => instructions::process_makev3_instruction(accounts, data)?,
+        EscrowInstrctions::TakeV3 => instructions::process_takev3_instruction(accounts, data)?,
+        EscrowInstrctions::MakeV4 => instructions::process_makev4_instruction(accounts, data)?,
+        EscrowInstrctions::TakeV4 => instructions::process_takev4_instruction(accounts, data)?,
+        EscrowInstrctions::MakeV5 => instructions::process_makev5_instruction(accounts, data)?,
+        EscrowInstrctions::TakeV5 => instructions::process_takev5_instruction(accounts, data)?,
         _ => return Err(ProgramError::InvalidInstructionData),
     }
     Ok(())
