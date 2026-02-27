@@ -36,11 +36,24 @@ pub fn process_makev4_instruction(accounts: &[AccountView], data: &[u8]) -> Prog
     let amount_to_receive = unsafe { *(data.as_ptr().add(1) as *const u64) };
     let amount_to_give = unsafe { *(data.as_ptr().add(9) as *const u64) };
 
-    let bump = [bump.to_le()];
+    // Serialize first to know the exact byte length
+    let escrow3_data = Escrow3 {
+        maker:             *maker.address().as_array(),
+        mint_a:            *mint_a.address().as_array(),
+        mint_b:            *mint_b.address().as_array(),
+        amount_to_receive: amount_to_receive.to_le_bytes(),
+        amount_to_give:    amount_to_give.to_le_bytes(),
+        bump:              data[0],
+    };
+    let json_bytes = serde_json::to_vec(&escrow3_data)
+        .map_err(|_| ProgramError::InvalidAccountData)?;
+    let json_len = json_bytes.len();  // exact size, no waste, no trailing zeros
+
+    let bump_byte = [bump.to_le()];
     let seed = [
         Seed::from(b"escrow"),
         Seed::from(maker.address().as_array()),
-        Seed::from(&bump),
+        Seed::from(&bump_byte),
     ];
     let seeds = Signer::from(&seed);
 
@@ -49,30 +62,22 @@ pub fn process_makev4_instruction(accounts: &[AccountView], data: &[u8]) -> Prog
             CreateAccount {
                 from: maker,
                 to: escrow3_account,
-                lamports: Rent::get()?.try_minimum_balance(Escrow3::LEN)?,
-                space: Escrow3::JSON_LEN as u64,
+                lamports: Rent::get()?.try_minimum_balance(json_len)?, // ← exact
+                space: json_len as u64,                                 // ← exact
                 owner: &crate::ID,
             }
             .invoke_signed(&[seeds.clone()])?;
-
         } else {
             return Err(ProgramError::IllegalOwner);
         }
     }
-    
-    
-    
-    let mut dummy = Escrow3::default();
-       dummy.set_inner(
-           escrow3_account,
-           maker.address(),
-           mint_a.address(),
-           mint_b.address(),
-           amount_to_receive.to_le_bytes(),
-           amount_to_give.to_le_bytes(),
-           data[0],
-       )?;
-    
+
+    // Write exact bytes — account is exactly json_len, no trailing zeros
+    {
+        let mut acc_data = escrow3_account.try_borrow_mut()?;
+        acc_data.copy_from_slice(&json_bytes);
+    }
+
 
     pinocchio_associated_token_account::instructions::Create {
         funding_account: maker,
