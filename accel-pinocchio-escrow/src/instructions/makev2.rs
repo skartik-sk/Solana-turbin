@@ -27,7 +27,7 @@ pub fn process_makev2_instruction(accounts: &[AccountView], data: &[u8]) -> Prog
     }
 
     let bump = data[0];
-    let seed = [b"escrow1".as_ref(), maker.address().as_ref(), &[bump]];
+    let seed = [b"escrow".as_ref(), maker.address().as_ref(), &[bump]];
     let _seeds = &seed[..];
 
     let escrow1_account_pda = derive_address(&seed, None, &crate::ID.to_bytes());
@@ -38,7 +38,7 @@ pub fn process_makev2_instruction(accounts: &[AccountView], data: &[u8]) -> Prog
 
     let bump = [bump.to_le()];
     let seed = [
-        Seed::from(b"escrow1"),
+        Seed::from(b"escrow"),
         Seed::from(maker.address().as_array()),
         Seed::from(&bump),
     ];
