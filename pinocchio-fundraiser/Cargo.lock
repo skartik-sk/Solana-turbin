@@ -1072,34 +1072,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "escrow"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "litesvm",
- "litesvm-token",
- "pinocchio 0.10.2",
- "pinocchio-associated-token-account",
- "pinocchio-log",
- "pinocchio-pubkey",
- "pinocchio-system",
- "pinocchio-token",
- "solana-account 4.1.0",
- "solana-address 2.2.0",
- "solana-instruction",
- "solana-keypair",
- "solana-message",
- "solana-native-token",
- "solana-pubkey 4.1.0",
- "solana-rpc-client",
- "solana-sdk-ids",
- "solana-signer",
- "solana-transaction",
- "spl-associated-token-account",
- "spl-token-2022",
-]
-
-[[package]]
 name = "feature-probe"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1204,6 +1176,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "fundraiser"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "litesvm",
+ "litesvm-token",
+ "pinocchio 0.10.2",
+ "pinocchio-associated-token-account",
+ "pinocchio-log",
+ "pinocchio-pubkey",
+ "pinocchio-system",
+ "pinocchio-token",
+ "solana-account 4.1.0",
+ "solana-address 2.2.0",
+ "solana-instruction",
+ "solana-keypair",
+ "solana-message",
+ "solana-native-token",
+ "solana-pubkey 4.1.0",
+ "solana-rpc-client",
+ "solana-sdk-ids",
+ "solana-signer",
+ "solana-transaction",
+ "spl-associated-token-account",
+ "spl-token-2022",
 ]
 
 [[package]]
