@@ -4,10 +4,12 @@ use pinocchio::{
     sysvars::{clock::Clock, rent::Rent, Sysvar},
     AccountView, ProgramResult,
 };
-use pinocchio_pubkey::derive_address;
 use pinocchio_token::{instructions::Transfer, state::Mint};
 
-use crate::constant::{MAX_CONTRIBUTION_PERCENTAGE, PERCENTAGE_SCALER, SECONDS_TO_DAYS};
+use crate::{
+    constant::{MAX_CONTRIBUTION_PERCENTAGE, PERCENTAGE_SCALER, SECONDS_TO_DAYS},
+    ID,
+};
 
 pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> ProgramResult {
     //amount u64 duration u8 -> u8-> 9
@@ -26,45 +28,52 @@ pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> 
         return Err(ProgramError::AccountDataTooSmall);
     }
 
-    let mut fundraiser_data = fundraiser.try_borrow_mut()?;
+    // Optimise — skip flag check
 
-    let maker = fundraiser_data[0..32].as_ref();
+    let (
+        fundraiser_mint,
+        fundraiser_duration,
+        fundraiser_time_started,
+        fundraiser_amount_to_raise,
+        fundraiser_current_amaount,
+    ) = {
+        let fundraiser_data = unsafe { fundraiser.borrow_unchecked() };
 
-    let bump = fundraiser_data[89];
-    let seed = [b"fundraiser".as_ref(), maker, &[bump]];
-    let _seeds = &seed[..];
-
-    let fundraiser_pda = derive_address(&seed, None, &crate::ID.to_bytes());
-    assert_eq!(fundraiser_pda, *fundraiser.address().as_array());
+        (
+            unsafe { &*(fundraiser.data_ptr().add(32) as *const [u8; 32]) },
+            unsafe { fundraiser.data_ptr().add(88).read() },
+            // Optimised: single load instruction, no slice bounds check, no try_into
+            unsafe { (fundraiser_data.as_ptr().add(80) as *const i64).read_unaligned() },
+            unsafe { (fundraiser_data.as_ptr().add(64) as *const u64).read_unaligned() },
+            unsafe { (fundraiser_data.as_ptr().add(72) as *const u64).read_unaligned() },
+        )
+    };
     // Verify mint_to_raise matches what's in the fundraiser
-    let fundraiser_mint = fundraiser_data[32..64].as_ref();
-    if fundraiser_mint != mint_to_raise.address().as_ref() {
+
+    if fundraiser_mint != mint_to_raise.address().as_array() {
         return Err(ProgramError::Custom(101));
     }
 
-    let contributor_bump = [data[8]];
-    let contributor_seed = [b"contributor", fundraiser.address().as_ref(), contributor.address().as_ref(), &contributor_bump];
-    let derived = derive_address(&contributor_seed, None, &crate::ID.to_bytes());
-    assert_eq!(derived, *contributor_account.address().as_array());
+    let contributor_bump = [unsafe { data.as_ptr().add(8).read() }];
 
     let seed = [
         Seed::from(b"contributor"),
-        Seed::from(fundraiser.address().as_ref()), Seed::from(contributor.address().as_ref()),
+        Seed::from(fundraiser.address().as_ref()),
+        Seed::from(contributor.address().as_ref()),
         Seed::from(&contributor_bump),
     ];
     let seeds = Signer::from(&seed);
 
-    let lamports = Rent::get()?.try_minimum_balance(8)?;
     //inti if neede for maket ata
-    if contributor_account.lamports() > 0 {
-        //already intilize do nothing.
-    } else {
+    if contributor_account.lamports() == 0 {
+        let lamports = Rent::get()?.try_minimum_balance(8)?;
+
         pinocchio_system::instructions::CreateAccount {
             from: contributor,
             to: contributor_account,
             space: 8,
             lamports,
-            owner: &crate::ID,
+            owner: &ID,
         }
         .invoke_signed(&[seeds])?;
     }
@@ -72,20 +81,20 @@ pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> 
     //program
     //
     //
-    let amount = u64::from_le_bytes(data[0..8].try_into().unwrap());
 
-    let mint_to_raise_decimals = mint_to_raise.try_borrow()?[32 + 8];
+    let amount = unsafe { (data.as_ptr() as *const u64).read_unaligned() };
+
+    let mint_to_raise_decimals = unsafe { mint_to_raise.data_ptr().add(40).read() };
     // Check if the amount to contribute meets the minimum amount required
-    if !(amount > 1_u8.pow(mint_to_raise_decimals as u32) as u64) {
+    if !(amount > 10_u8.pow(mint_to_raise_decimals as u32) as u64) {
         return Err(ProgramError::Custom(102));
     }
 
     // Check if the amount to contribute is less than the maximum allowed contribution
     //
     //
-    let fundraiser_amount_to_raise =
-        u64::from_le_bytes(fundraiser_data[64..72].try_into().unwrap());
-    if !(amount <= (fundraiser_amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE) / PERCENTAGE_SCALER) {
+    let max_contri = (fundraiser_amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE) / PERCENTAGE_SCALER;
+    if !(amount <= max_contri) {
         return Err(ProgramError::Custom(103));
     }
 
@@ -99,23 +108,20 @@ pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> 
     pub bump: u8,
     */
 
-    let fundraiser_duration = fundraiser_data[32 + 32 + 8 + 8 + 8];
-
-    let fundraiser_time_started = i64::from_le_bytes(fundraiser_data[80..88].try_into().unwrap());
     // Check if the fundraising duration has been reached
     let current_time = Clock::get()?.unix_timestamp;
-    if !(fundraiser_duration <= ((current_time - fundraiser_time_started) / SECONDS_TO_DAYS) as u8) {
+    if !(fundraiser_duration <= ((current_time - fundraiser_time_started) / SECONDS_TO_DAYS) as u8)
+    {
         return Err(ProgramError::Custom(104));
         // crate::FundraiserError::FundraiserEnded
     }
-    let mut contributor_account_data = contributor_account.try_borrow_mut()?;
+
     let contributor_account_amount =
-        u64::from_le_bytes(contributor_account_data[0..8].try_into().unwrap());
+        unsafe { (contributor_account.data_ptr() as *const u64).read_unaligned() };
+
     // Check if the maximum contributions per contributor have been reached
-    if !((contributor_account_amount
-        <= (fundraiser_amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE) / PERCENTAGE_SCALER)
-        && (contributor_account_amount + amount
-            <= (fundraiser_amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE) / PERCENTAGE_SCALER))
+    if !((contributor_account_amount <= max_contri)
+        && (contributor_account_amount + amount <= max_contri))
     {
         return Err(ProgramError::Custom(105));
         // FundraiserError::MaximumContributionsReached
@@ -129,24 +135,32 @@ pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> 
     }
     .invoke()?;
 
-    let fundraiser_current_amaount =
-        u64::from_le_bytes(fundraiser_data[72..80].try_into().unwrap());
-    fundraiser_data[72..80].copy_from_slice(
-        fundraiser_current_amaount
-            .checked_add(amount)
-            .unwrap()
-            .to_le_bytes()
-            .as_ref(),
-    );
+    unsafe {
+        // COMPUTE
+        let new_val = fundraiser_current_amaount.unchecked_add(amount);
+
+        let wptr = fundraiser.data_ptr().add(72) as *mut u64;
+
+        wptr.write_unaligned(new_val);
+    }
+
+    // let fundraiser_current_amaount =
+    //     u64::from_le_bytes(fundraiser_data[72..80].try_into().unwrap());
+    // fundraiser_data[72..80].copy_from_slice(
+    //     unsafe { fundraiser_current_amaount
+    //         .unchecked_add(amount)
+    //         .to_le_bytes()
+    //         .as_ref() },
+    // );
 
     //? - i Think
-    contributor_account_data[0..8].copy_from_slice(
-        contributor_account_amount
-            .checked_add(amount)
-            .unwrap()
-            .to_le_bytes()
-            .as_ref(),
-    );
+    //
+    unsafe {
+
+        let wptr = contributor_account.data_ptr() as *mut u64;
+
+        wptr.write_unaligned(contributor_account_amount.unchecked_add(amount));
+    }
 
     Ok(())
 }

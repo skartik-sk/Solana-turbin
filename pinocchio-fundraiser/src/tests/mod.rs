@@ -9,7 +9,6 @@ mod tests {
     use solana_pubkey::Pubkey;
     use solana_signer::Signer;
     use solana_transaction::Transaction;
-    use spl_associated_token_account::get_associated_token_address;
     use std::{path::PathBuf, sync::Mutex};
 
     const TOKEN_PROGRAM_ID: Pubkey = spl_token::ID;
@@ -125,8 +124,8 @@ mod tests {
 
         // ── Derive PDAs ──────────────────────────────────────────────────────
         let (fundraiser, fundraiser_bump) = fundraiser_pda(&maker.pubkey());
-        let vault = get_associated_token_address(&fundraiser, &mint);
-
+        let vault_keypair = Keypair::new();
+        let vault = vault_keypair.pubkey();
         println!("Fundraiser PDA: {}, bump: {}", fundraiser, fundraiser_bump);
         println!("Vault ATA:      {}", vault);
 
@@ -151,7 +150,7 @@ mod tests {
                 AccountMeta::new(maker.pubkey(), true),
                 AccountMeta::new_readonly(mint, false),
                 AccountMeta::new(fundraiser, false),
-                AccountMeta::new(vault, false),
+                AccountMeta::new(vault, true),
                 AccountMeta::new_readonly(system_program_id(), false),
                 AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
                 AccountMeta::new_readonly(associated_token_program_id(), false),
@@ -159,7 +158,7 @@ mod tests {
             data: init_data,
         };
 
-        let cu = send_tx(&mut svm, &[init_ix], &maker.pubkey(), &[&maker]);
+        let cu = send_tx(&mut svm, &[init_ix], &maker.pubkey(), &[&maker,&vault_keypair]);
         println!("Initialize OK — CUs: {}", cu);
         record_cu("initialize/base", cu);
 
@@ -209,8 +208,8 @@ mod tests {
 
         // ── Initialize ───────────────────────────────────────────────────────
         let (fundraiser, fundraiser_bump) = fundraiser_pda(&maker.pubkey());
-        let vault = get_associated_token_address(&fundraiser, &mint);
-
+        let vault_keypair = Keypair::new();
+        let vault = vault_keypair.pubkey();
         let amount_to_raise: u64 = 30_000_000;
         let init_data: Vec<u8> = [
             vec![0u8],
@@ -225,14 +224,14 @@ mod tests {
                 AccountMeta::new(maker.pubkey(), true),
                 AccountMeta::new_readonly(mint, false),
                 AccountMeta::new(fundraiser, false),
-                AccountMeta::new(vault, false),
+                AccountMeta::new(vault, true),
                 AccountMeta::new_readonly(system_program_id(), false),
                 AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
                 AccountMeta::new_readonly(associated_token_program_id(), false),
             ],
             data: init_data,
         };
-        send_tx(&mut svm, &[init_ix], &maker.pubkey(), &[&maker]);
+        send_tx(&mut svm, &[init_ix], &maker.pubkey(), &[&maker,&vault_keypair]);
         println!("Initialized fundraiser ✓");
 
         // ── Contribute #1 — 1_000_000 ────────────────────────────────────────
@@ -341,8 +340,8 @@ mod tests {
             .unwrap();
 
         let (fundraiser, fundraiser_bump) = fundraiser_pda(&maker.pubkey());
-        let vault = get_associated_token_address(&fundraiser, &mint);
-
+        let vault_keypair = Keypair::new();
+        let vault = vault_keypair.pubkey();
         let amount_to_raise: u64 = 30_000_000;
         let init_data: Vec<u8> = [
             vec![0u8],
@@ -357,14 +356,14 @@ mod tests {
                 AccountMeta::new(maker.pubkey(), true),
                 AccountMeta::new_readonly(mint, false),
                 AccountMeta::new(fundraiser, false),
-                AccountMeta::new(vault, false),
+                AccountMeta::new(vault, true),
                 AccountMeta::new_readonly(system_program_id(), false),
                 AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
                 AccountMeta::new_readonly(associated_token_program_id(), false),
             ],
             data: init_data,
         };
-        send_tx(&mut svm, &[init_ix], &maker.pubkey(), &[&maker]);
+        send_tx(&mut svm, &[init_ix], &maker.pubkey(), &[&maker,&vault_keypair]);
 
         let (contributor_account, contributor_bump) =
             contributor_pda(&fundraiser, &contributor.pubkey());
@@ -452,8 +451,8 @@ mod tests {
             .unwrap();
 
         let (fundraiser, fundraiser_bump) = fundraiser_pda(&maker.pubkey());
-        let vault = get_associated_token_address(&fundraiser, &mint);
-
+        let vault_keypair = Keypair::new();
+        let vault = vault_keypair.pubkey();
         let init_data: Vec<u8> = [
             vec![0u8],
             vec![fundraiser_bump],
@@ -467,14 +466,14 @@ mod tests {
                 AccountMeta::new(maker.pubkey(), true),
                 AccountMeta::new_readonly(mint, false),
                 AccountMeta::new(fundraiser, false),
-                AccountMeta::new(vault, false),
+                AccountMeta::new(vault, true),
                 AccountMeta::new_readonly(system_program_id(), false),
                 AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
                 AccountMeta::new_readonly(associated_token_program_id(), false),
             ],
             data: init_data,
         };
-        send_tx(&mut svm, &[init_ix], &maker.pubkey(), &[&maker]);
+        send_tx(&mut svm, &[init_ix], &maker.pubkey(), &[&maker,&vault_keypair]);
 
         let (contributor_account, contributor_bump) =
             contributor_pda(&fundraiser, &contributor.pubkey());
@@ -555,8 +554,8 @@ mod tests {
             .unwrap();
 
         let (fundraiser, fundraiser_bump) = fundraiser_pda(&maker.pubkey());
-        let vault = get_associated_token_address(&fundraiser, &mint);
-
+        let vault_keypair = Keypair::new();
+        let vault = vault_keypair.pubkey();
         // Initialize with duration=0 (immediately ended, but target not met)
         let init_data: Vec<u8> = [
             vec![0u8],
@@ -571,14 +570,14 @@ mod tests {
                 AccountMeta::new(maker.pubkey(), true),
                 AccountMeta::new_readonly(mint, false),
                 AccountMeta::new(fundraiser, false),
-                AccountMeta::new(vault, false),
+                AccountMeta::new(vault, true),
                 AccountMeta::new_readonly(system_program_id(), false),
                 AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
                 AccountMeta::new_readonly(associated_token_program_id(), false),
             ],
             data: init_data,
         };
-        send_tx(&mut svm, &[init_ix], &maker.pubkey(), &[&maker]);
+        send_tx(&mut svm, &[init_ix], &maker.pubkey(), &[&maker,&vault_keypair]);
 
         let (contributor_account, contributor_bump) =
             contributor_pda(&fundraiser, &contributor.pubkey());
@@ -695,8 +694,8 @@ mod tests {
             .unwrap();
 
         let (fundraiser, fundraiser_bump) = fundraiser_pda(&maker.pubkey());
-        let vault = get_associated_token_address(&fundraiser, &mint);
-
+        let vault_keypair = Keypair::new();
+        let vault = vault_keypair.pubkey();
         // Initialize fundraiser with target = 1_000_000, duration = 0
         let init_data: Vec<u8> = [
             vec![0u8],
@@ -711,14 +710,14 @@ mod tests {
                 AccountMeta::new(maker.pubkey(), true),
                 AccountMeta::new_readonly(mint, false),
                 AccountMeta::new(fundraiser, false),
-                AccountMeta::new(vault, false),
+                AccountMeta::new(vault, true),
                 AccountMeta::new_readonly(system_program_id(), false),
                 AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
                 AccountMeta::new_readonly(associated_token_program_id(), false),
             ],
             data: init_data,
         };
-        send_tx(&mut svm, &[init_ix], &maker.pubkey(), &[&maker]);
+        send_tx(&mut svm, &[init_ix], &maker.pubkey(), &[&maker,&vault_keypair]);
         println!("Fundraiser initialized with target={}", target);
 
         // Each contributor contributes exactly 10% (= 100_000) once
