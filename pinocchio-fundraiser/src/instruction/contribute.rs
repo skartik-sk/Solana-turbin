@@ -11,7 +11,7 @@ use crate::constant::{MAX_CONTRIBUTION_PERCENTAGE, PERCENTAGE_SCALER, SECONDS_TO
 
 pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> ProgramResult {
     //amount u64 duration u8 -> u8-> 9
-    let [contributor, mint_to_raise, fundraiser, contributor_account, contributor_ata, vault, system_program, token_program, associated_token_program] =
+    let [contributor, mint_to_raise, fundraiser, contributor_account, contributor_ata, vault, _system_program, _token_program] =
         accounts
     else {
         return Err(pinocchio::error::ProgramError::NotEnoughAccountKeys);
@@ -22,7 +22,7 @@ pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> 
     if !contributor.is_signer() {
         return Err(ProgramError::MissingRequiredSignature);
     }
-    if !Mint::LEN == mint_to_raise.data_len() {
+    if !(Mint::LEN == mint_to_raise.data_len()) {
         return Err(ProgramError::AccountDataTooSmall);
     }
 
@@ -39,7 +39,7 @@ pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> 
     // Verify mint_to_raise matches what's in the fundraiser
     let fundraiser_mint = fundraiser_data[32..64].as_ref();
     if fundraiser_mint != mint_to_raise.address().as_ref() {
-        return Err(ProgramError::InvalidAccountData);
+        return Err(ProgramError::Custom(101));
     }
 
     let contributor_bump = [data[8]];
@@ -54,7 +54,7 @@ pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> 
     ];
     let seeds = Signer::from(&seed);
 
-    let lamports = Rent::get()?.minimum_balance(8);
+    let lamports = Rent::get()?.try_minimum_balance(8)?;
     //inti if neede for maket ata
     if contributor_account.lamports() > 0 {
         //already intilize do nothing.
@@ -76,8 +76,8 @@ pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> 
 
     let mint_to_raise_decimals = mint_to_raise.try_borrow()?[32 + 8];
     // Check if the amount to contribute meets the minimum amount required
-    if !amount > 1_u8.pow(mint_to_raise_decimals as u32) as u64 {
-        return Err(ProgramError::AccountDataTooSmall);
+    if !(amount > 1_u8.pow(mint_to_raise_decimals as u32) as u64) {
+        return Err(ProgramError::Custom(102));
     }
 
     // Check if the amount to contribute is less than the maximum allowed contribution
@@ -85,8 +85,8 @@ pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> 
     //
     let fundraiser_amount_to_raise =
         u64::from_le_bytes(fundraiser_data[64..72].try_into().unwrap());
-    if !amount <= (fundraiser_amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE) / PERCENTAGE_SCALER {
-        return Err(ProgramError::ArithmeticOverflow);
+    if !(amount <= (fundraiser_amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE) / PERCENTAGE_SCALER) {
+        return Err(ProgramError::Custom(103));
     }
 
     /*
@@ -105,7 +105,7 @@ pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> 
     // Check if the fundraising duration has been reached
     let current_time = Clock::get()?.unix_timestamp;
     if !(fundraiser_duration <= ((current_time - fundraiser_time_started) / SECONDS_TO_DAYS) as u8) {
-        return Err(ProgramError::IncorrectProgramId);
+        return Err(ProgramError::Custom(104));
         // crate::FundraiserError::FundraiserEnded
     }
     let mut contributor_account_data = contributor_account.try_borrow_mut()?;
@@ -117,7 +117,7 @@ pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> 
         && (contributor_account_amount + amount
             <= (fundraiser_amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE) / PERCENTAGE_SCALER))
     {
-        return Err(ProgramError::MaxInstructionTraceLengthExceeded);
+        return Err(ProgramError::Custom(105));
         // FundraiserError::MaximumContributionsReached
     }
 
@@ -130,8 +130,8 @@ pub fn process_contribute_instruction(accounts: &[AccountView], data: &[u8]) -> 
     .invoke()?;
 
     let fundraiser_current_amaount =
-        u64::from_le_bytes(fundraiser_data[64..72].try_into().unwrap());
-    fundraiser_data[64..72].copy_from_slice(
+        u64::from_le_bytes(fundraiser_data[72..80].try_into().unwrap());
+    fundraiser_data[72..80].copy_from_slice(
         fundraiser_current_amaount
             .checked_add(amount)
             .unwrap()

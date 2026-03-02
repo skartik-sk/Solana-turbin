@@ -11,33 +11,11 @@ use pinocchio::{
 use pinocchio_pubkey::derive_address;
 use pinocchio_system::instructions::CreateAccount;
 
-use crate::{constant::MIN_AMOUNT_TO_RAISE, error::InvalidAmount, state::Fundraiser};
-/*  #[account(mut)]
-pub maker: Signer<'info>,
-pub mint_to_raise: Account<'info, Mint>,
-#[account(
-    init,
-    payer = maker,
-    seeds = [b"fundraiser", maker.key().as_ref()],
-    bump,
-    space = ANCHOR_DISCRIMINATOR + Fundraiser::INIT_SPACE,
-)]
-pub fundraiser: Account<'info, Fundraiser>,
-#[account(
-    init,
-    payer = maker,
-    associated_token::mint = mint_to_raise,
-    associated_token::authority = fundraiser,
-)]
-pub vault: Account<'info, TokenAccount>,
-pub system_program: Program<'info, System>,
-pub token_program: Program<'info, Token>,
-pub associated_token_program: Program<'info, AssociatedToken>,
-*/
+use crate::{constant::MIN_AMOUNT_TO_RAISE, state::Fundraiser};
 
 pub fn process_initialize_instruction(accounts: &[AccountView], data: &[u8]) -> ProgramResult {
     //amount u64 duration u8 -> u8-> 9
-    let [maker, mint_to_raise, fundraiser, vault, system_program, token_program, associated_token_program] =
+    let [maker, mint_to_raise, fundraiser, vault, system_program, token_program, _associated_token_program] =
         accounts
     else {
         return Err(pinocchio::error::ProgramError::NotEnoughAccountKeys);

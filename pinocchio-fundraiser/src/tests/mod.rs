@@ -84,8 +84,10 @@ mod tests {
         let recent_blockhash = svm.latest_blockhash();
         let tx = Transaction::new(signers, message, recent_blockhash);
         let result = svm.send_transaction(tx).expect("Transaction failed");
+        svm.expire_blockhash(); // ← advance the blockhash after every tx
         result.compute_units_consumed
     }
+
 
     // ─────────────────────────────────────────────────────────────────────────
     // Test 1 (mirrors TS "Test Preparation"):
@@ -110,7 +112,7 @@ mod tests {
             .unwrap();
 
         // Create maker ATA (receives tokens on successful claim)
-        let maker_ata = CreateAssociatedTokenAccount::new(&mut svm, &contributor, &mint)
+        let _maker_ata = CreateAssociatedTokenAccount::new(&mut svm, &contributor, &mint)
             .owner(&maker.pubkey())
             .send()
             .unwrap();
@@ -619,7 +621,7 @@ mod tests {
             program_id: program_id(),
             accounts: vec![
                 AccountMeta::new(contributor.pubkey(), true),
-                AccountMeta::new_readonly(maker.pubkey(), false),
+                AccountMeta::new(maker.pubkey(), false),
                 AccountMeta::new_readonly(mint, false),
                 AccountMeta::new(fundraiser, false),
                 AccountMeta::new(contributor_account, false),
@@ -654,55 +656,53 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────────
     #[test]
     fn test_check_contributions_success() {
-        let (mut svm, maker, contributor) = setup();
+        let (mut svm, maker, _contributor) = setup();
 
-        let mint = CreateMint::new(&mut svm, &contributor)
+        // Create 10 contributor keypairs, each will contribute exactly 10% of the target
+        let contributors: Vec<Keypair> = (0..10).map(|_| Keypair::new()).collect();
+        for c in &contributors {
+            svm.airdrop(&c.pubkey(), 10 * LAMPORTS_PER_SOL)
+                .expect("Airdrop failed");
+        }
+
+        // contributor[0] is also the mint authority for simplicity
+        let mint = CreateMint::new(&mut svm, &contributors[0])
             .decimals(6)
-            .authority(&contributor.pubkey())
+            .authority(&contributors[0].pubkey())
             .send()
             .unwrap();
 
-        let contributor_ata = CreateAssociatedTokenAccount::new(&mut svm, &contributor, &mint)
-            .owner(&contributor.pubkey())
-            .send()
-            .unwrap();
-
-        let maker_ata = CreateAssociatedTokenAccount::new(&mut svm, &contributor, &mint)
-            .owner(&maker.pubkey())
-            .send()
-            .unwrap();
-
-        // Mint exactly the target amount to contributor
-        let amount_to_raise: u64 = 3_000_000; // small enough to contribute in one tx (within 10% rule of 30M)
-        // Use a smaller raise target so 10% = 300_000 * 10 = 3_000_000 fits within rules
-        // Actually: target=3_000_000, max_contribution=300_000 per tx.
-        // With 10 contributions of 300_000 we'd reach the target. That's too many txs.
-        // Instead: target=1_000_000, max_contribution=100_000 → need 10 contributions.
-        // Simpler: target=500_000, max=50_000 → 10 contributions.
-        // SIMPLEST for test: use 1 contributor that contributes the full amount in one go:
-        // target = amount * 10 so that 10% = amount.
-        // E.g. target = 10_000_000, contributor has 10_000_000. Max contribution = 1_000_000.
-        // Need 10 contributions to reach target. Too many. Let's just mint the full target
-        // and use target = 1_000_000, contributes 100_000 x 10 times.
-        // For test simplicity, let's just do a single contribution that reaches target:
-        // target = 1_000_000, max_contribution = 100_000 → can't reach in one go.
-        // This is a fundamental design constraint: 10% rule means you need at least 10 contributions.
-        // Let's mint enough and do 10 contributions:
+        // Create an ATA for each contributor and mint tokens to them
         let target: u64 = 1_000_000;
-        let per_contribution: u64 = target / 10; // = 100_000 (exactly 10%)
-        MintTo::new(&mut svm, &contributor, &mint, &contributor_ata, target + per_contribution)
+        let per_contribution: u64 = target / 10; // = 100_000, exactly 10% of target
+
+        let mut contributor_atas = Vec::new();
+        for c in &contributors {
+            let ata = CreateAssociatedTokenAccount::new(&mut svm, c, &mint)
+                .owner(&c.pubkey())
+                .send()
+                .unwrap();
+            MintTo::new(&mut svm, &contributors[0], &mint, &ata, per_contribution)
+                .send()
+                .unwrap();
+            contributor_atas.push(ata);
+        }
+
+        // Create maker ATA (receives tokens on successful claim)
+        let maker_ata = CreateAssociatedTokenAccount::new(&mut svm, &contributors[0], &mint)
+            .owner(&maker.pubkey())
             .send()
             .unwrap();
 
         let (fundraiser, fundraiser_bump) = fundraiser_pda(&maker.pubkey());
         let vault = get_associated_token_address(&fundraiser, &mint);
 
-        // Initialize with small target that can actually be filled
+        // Initialize fundraiser with target = 1_000_000, duration = 0
         let init_data: Vec<u8> = [
             vec![0u8],
             vec![fundraiser_bump],
             target.to_le_bytes().to_vec(),
-            vec![0u8],
+            vec![0u8], // duration = 0
         ]
         .concat();
         let init_ix = Instruction {
@@ -719,12 +719,13 @@ mod tests {
             data: init_data,
         };
         send_tx(&mut svm, &[init_ix], &maker.pubkey(), &[&maker]);
+        println!("Fundraiser initialized with target={}", target);
 
-        let (contributor_account, contributor_bump) =
-            contributor_pda(&fundraiser, &contributor.pubkey());
+        // Each contributor contributes exactly 10% (= 100_000) once
+        for (i, (c, ata)) in contributors.iter().zip(contributor_atas.iter()).enumerate() {
+            let (contributor_account, contributor_bump) =
+                contributor_pda(&fundraiser, &c.pubkey());
 
-        // Contribute 10 times to reach the target
-        for i in 0..10 {
             let data: Vec<u8> = [
                 vec![1u8],
                 per_contribution.to_le_bytes().to_vec(),
@@ -734,24 +735,24 @@ mod tests {
             let ix = Instruction {
                 program_id: program_id(),
                 accounts: vec![
-                    AccountMeta::new(contributor.pubkey(), true),
+                    AccountMeta::new(c.pubkey(), true),
                     AccountMeta::new_readonly(mint, false),
                     AccountMeta::new(fundraiser, false),
                     AccountMeta::new(contributor_account, false),
-                    AccountMeta::new(contributor_ata, false),
+                    AccountMeta::new(*ata, false),
                     AccountMeta::new(vault, false),
                     AccountMeta::new_readonly(system_program_id(), false),
                     AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
                 ],
                 data,
             };
-            send_tx(&mut svm, &[ix], &contributor.pubkey(), &[&contributor]);
-            println!("Contribution {} done", i + 1);
+            send_tx(&mut svm, &[ix], &c.pubkey(), &[c]);
+            println!("Contributor {} contributed {} ✓", i + 1, per_contribution);
         }
 
         let vault_balance = get_token_balance(&svm, &vault);
         println!("Vault balance before claim: {}", vault_balance);
-        assert_eq!(vault_balance, target);
+        assert_eq!(vault_balance, target, "Vault should equal the target");
 
         // ── Check Contributions (claim) ──────────────────────────────────────
         let check_ix = Instruction {
@@ -779,6 +780,7 @@ mod tests {
         let vault_balance_after = get_token_balance(&svm, &vault);
         assert_eq!(vault_balance_after, 0, "Vault should be empty after claim");
     }
+
 
     // ─────────────────────────────────────────────────────────────────────────
     // Utilities
