@@ -14,3 +14,6 @@ A collection of Solana smart contracts and Rust projects exploring various block
 | [transfer-hook-vault](./transfer-hook-vault/) | Token transfer hook with vault functionality for securing tokens during transfers | Anchor 0.32.1, SPL Token 2022 |
 | [tuktuk-gpt-oracle](./tuktuk-gpt-oracle/) | GPT-powered pricing oracle with TukTuk scheduling for AI-based price feeds | Anchor 0.32.1, TukTuk SDK, SPL Token |
 | [rust-adv](./rust-adv/) | Serialization benchmark comparing Borsh, Serde JSON, and Wincode performance | Rust, Borsh, Serde, Wincode |
+| [accel-pinocchio-escrow](./accel-pinocchio-escrow/) | High-performance escrow implementation using Pinocchio framework for optimized Solana programs with reduced compute cost | Pinocchio 0.10.2, LiteSVM, Wincode, Borsh |
+| [pinocchio-fundraiser](./pinocchio-fundraiser/) | Crowdfunding/fundraiser program built with Pinocchio framework for minimal compute unit usage | Pinocchio 0.10.2, LiteSVM, SPL Token 2022 |
+| [nft-staking-core-example](./nft-staking-core-example/) | NFT staking implementation using Metaplex Core (MPL Core) for next-gen NFT standards | Anchor 0.32.1, MPL Core, UMI |
