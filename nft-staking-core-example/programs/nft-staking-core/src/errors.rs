@@ -16,4 +16,7 @@ pub enum StakingError {
     FreezePeriodNotElapsed,
     #[msg("Overflow")]
     Overflow,
+    
+    #[msg("Collection do not staked.")]
+    NoCollection,
 }

@@ -1,13 +1,18 @@
+use crate::errors::StakingError;
+use crate::state::Config;
 use anchor_lang::prelude::*;
 use mpl_core::{
+    accounts::{BaseAssetV1, BaseCollectionV1},
+    fetch_plugin,
+    instructions::{
+        AddCollectionPluginV1CpiBuilder, AddPluginV1CpiBuilder,
+        UpdateCollectionPluginV1CpiBuilder, UpdatePluginV1CpiBuilder,
+    },
+    types::{
+        Attribute, Attributes, FreezeDelegate, Plugin, PluginAuthority, PluginType, UpdateAuthority,
+    },
     ID as MPL_CORE_ID,
-    accounts::{BaseAssetV1, BaseCollectionV1}, 
-    fetch_plugin, 
-    instructions::{AddPluginV1CpiBuilder, UpdatePluginV1CpiBuilder}, 
-    types::{Attribute, Attributes, FreezeDelegate, Plugin, PluginAuthority, PluginType, UpdateAuthority}
 };
-use crate::state::Config;
-use crate::errors::StakingError;
 
 #[derive(Accounts)]
 pub struct Stake<'info> {
@@ -37,13 +42,21 @@ pub struct Stake<'info> {
 }
 impl<'info> Stake<'info> {
     pub fn stake(&mut self, bumps: &StakeBumps) -> Result<()> {
-        
         // Verify NFT owner and update authority
         let base_asset = BaseAssetV1::try_from(&self.nft.to_account_info())?;
-        require!(base_asset.owner == self.user.key(), StakingError::InvalidOwner);
-        require!(base_asset.update_authority == UpdateAuthority::Collection(self.collection.key()), StakingError::InvalidAuthority);
+        require!(
+            base_asset.owner == self.user.key(),
+            StakingError::InvalidOwner
+        );
+        require!(
+            base_asset.update_authority == UpdateAuthority::Collection(self.collection.key()),
+            StakingError::InvalidAuthority
+        );
         let base_collection = BaseCollectionV1::try_from(&self.collection.to_account_info())?;
-        require!(base_collection.update_authority == self.update_authority.key(), StakingError::InvalidAuthority);
+        require!(
+            base_collection.update_authority == self.update_authority.key(),
+            StakingError::InvalidAuthority
+        );
 
         // Signer seeds for the update authority
         let collection_key = self.collection.key();
@@ -57,7 +70,10 @@ impl<'info> Stake<'info> {
         let current_time = Clock::get()?.unix_timestamp;
 
         // Check if the NFT has the attribute plugin already added
-        match fetch_plugin::<BaseAssetV1, Attributes>(&self.nft.to_account_info(), PluginType::Attributes) {
+        match fetch_plugin::<BaseAssetV1, Attributes>(
+            &self.nft.to_account_info(),
+            PluginType::Attributes,
+        ) {
             Err(_) => {
                 // Add the attribute plugin to the NFT if it doesn't have it yet ('staked' and 'staked_at' attributes)
                 AddPluginV1CpiBuilder::new(&self.mpl_core_program.to_account_info())
@@ -66,20 +82,18 @@ impl<'info> Stake<'info> {
                     .payer(&self.user.to_account_info())
                     .authority(Some(&self.update_authority.to_account_info()))
                     .system_program(&self.system_program.to_account_info())
-                    .plugin(Plugin::Attributes(
-                        Attributes { 
-                            attribute_list: vec![
-                                Attribute { 
-                                    key: "staked".to_string(), 
-                                    value: "true".to_string() 
-                                },
-                                Attribute { 
-                                    key: "staked_at".to_string(), 
-                                    value: current_time.to_string() 
-                                },
-                            ] 
-                        }
-                    ))
+                    .plugin(Plugin::Attributes(Attributes {
+                        attribute_list: vec![
+                            Attribute {
+                                key: "staked".to_string(),
+                                value: "true".to_string(),
+                            },
+                            Attribute {
+                                key: "staked_at".to_string(),
+                                value: current_time.to_string(),
+                            },
+                        ],
+                    }))
                     .init_authority(PluginAuthority::UpdateAuthority)
                     .invoke_signed(&[signer_seeds])?;
             }
@@ -91,32 +105,32 @@ impl<'info> Stake<'info> {
                 for attribute in fetched_attribute_list.attribute_list {
                     if attribute.key == "staked" {
                         require!(attribute.value == "false", StakingError::AlreadyStaked);
-                        attribute_list.push(Attribute { 
-                            key: "staked".to_string(), 
-                            value: "true".to_string() 
+                        attribute_list.push(Attribute {
+                            key: "staked".to_string(),
+                            value: "true".to_string(),
                         });
                         staked = true;
-                    }else if attribute.key == "staked_at" {
-                        attribute_list.push(Attribute { 
-                            key: "staked_at".to_string(), 
-                            value: current_time.to_string() 
+                    } else if attribute.key == "staked_at" {
+                        attribute_list.push(Attribute {
+                            key: "staked_at".to_string(),
+                            value: current_time.to_string(),
                         });
                         staked_at = true;
-                    }else {
+                    } else {
                         attribute_list.push(attribute);
                     }
                 }
                 // Add the 'staked' and 'staked_at' attributes if they don't exist
                 if !staked {
-                    attribute_list.push(Attribute { 
-                        key: "staked".to_string(), 
-                        value: "true".to_string() 
+                    attribute_list.push(Attribute {
+                        key: "staked".to_string(),
+                        value: "true".to_string(),
                     });
                 }
                 if !staked_at {
-                    attribute_list.push(Attribute { 
-                        key: "staked_at".to_string(), 
-                        value: current_time.to_string() 
+                    attribute_list.push(Attribute {
+                        key: "staked_at".to_string(),
+                        value: current_time.to_string(),
                     });
                 }
                 UpdatePluginV1CpiBuilder::new(&self.mpl_core_program.to_account_info())
@@ -125,13 +139,73 @@ impl<'info> Stake<'info> {
                     .payer(&self.user.to_account_info())
                     .authority(Some(&self.update_authority.to_account_info()))
                     .system_program(&self.system_program.to_account_info())
-                    .plugin(Plugin::Attributes( Attributes { attribute_list }))
+                    .plugin(Plugin::Attributes(Attributes { attribute_list }))
+                    .invoke_signed(&[signer_seeds])?;
+            }
+        }
+
+        //update collecelt to increase staked quatitry.
+        match fetch_plugin::<BaseCollectionV1, Attributes>(
+            &self.collection.to_account_info(),
+            PluginType::Attributes,
+        ) {
+            Err(_) => {
+                // Add the attribute plugin to the NFT if it doesn't have it yet ('staked' and 'staked_at' attributes)
+                AddCollectionPluginV1CpiBuilder::new(&self.mpl_core_program.to_account_info())
+                    .collection(&self.collection.to_account_info())
+                    .payer(&self.user.to_account_info())
+                    .authority(Some(&self.update_authority.to_account_info()))
+                    .system_program(&self.system_program.to_account_info())
+                    .plugin(Plugin::Attributes(Attributes {
+                        attribute_list: vec![Attribute {
+                            key: "total_staked".to_string(),
+                            value: 1.to_string(),
+                        }],
+                    }))
+                    .init_authority(PluginAuthority::UpdateAuthority)
+                    .invoke_signed(&[signer_seeds])?;
+            }
+            Ok((_, fetched_attribute_list, _)) => {
+                // Verify the fetched attribute list has the 'staked' and 'staked_at' attributes
+                let mut attribute_list: Vec<Attribute> = Vec::new();
+                let mut is_total_staked_no = false;
+
+                for attribute in fetched_attribute_list.attribute_list {
+                    if attribute.key == "total_staked" {
+                        let total_staked_no: u64 = attribute.value.parse::<u64>().unwrap_or(0);
+                        let incremented = total_staked_no.checked_add(1).unwrap_or(total_staked_no);
+                        attribute_list.push(Attribute {
+                            key: "total_staked".to_string(),
+                            value: incremented.to_string(),
+                        });
+                        is_total_staked_no = true;
+                    } else {
+                        attribute_list.push(attribute);
+                    }
+                }
+                // Add the 'staked' and 'staked_at' attributes if they don't exist
+                if !is_total_staked_no {
+                    attribute_list.push(Attribute {
+                        key: "total_staked".to_string(),
+                        value: 1.to_string(),
+                    });
+                }
+
+                UpdateCollectionPluginV1CpiBuilder::new(&self.mpl_core_program.to_account_info())
+                    .collection(&self.collection.to_account_info())
+                    .payer(&self.user.to_account_info())
+                    .authority(Some(&self.update_authority.to_account_info()))
+                    .system_program(&self.system_program.to_account_info())
+                    .plugin(Plugin::Attributes(Attributes { attribute_list }))
                     .invoke_signed(&[signer_seeds])?;
             }
         }
 
         // Freeze the NFT (check if FreezeDelegate already exists from a previous stake)
-        match fetch_plugin::<BaseAssetV1, FreezeDelegate>(&self.nft.to_account_info(), PluginType::FreezeDelegate) {
+        match fetch_plugin::<BaseAssetV1, FreezeDelegate>(
+            &self.nft.to_account_info(),
+            PluginType::FreezeDelegate,
+        ) {
             Err(_) => {
                 // First time staking — add FreezeDelegate plugin
                 AddPluginV1CpiBuilder::new(&self.mpl_core_program.to_account_info())

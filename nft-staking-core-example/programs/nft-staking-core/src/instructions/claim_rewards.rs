@@ -4,8 +4,8 @@ use mpl_core::{
     ID as MPL_CORE_ID,
     accounts::{BaseAssetV1, BaseCollectionV1}, 
     fetch_plugin, 
-    instructions::{UpdateCollectionPluginV1CpiBuilder, UpdatePluginV1CpiBuilder},
-    types::{Attribute, Attributes, FreezeDelegate, Plugin, PluginType, UpdateAuthority}
+    instructions::UpdatePluginV1CpiBuilder,
+    types::{Attribute, Attributes, Plugin, PluginType, UpdateAuthority}
 };
 use crate::state::Config;
 use crate::errors::StakingError;
@@ -14,7 +14,7 @@ use crate::errors::StakingError;
 const SECONDS_PER_DAY: i64 = 86400;
 
 #[derive(Accounts)]
-pub struct Unstake<'info> {
+pub struct ClaimRewards<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     /// CHECK: PDA Update authority
@@ -54,8 +54,8 @@ pub struct Unstake<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
-impl<'info> Unstake<'info> {
-    pub fn unstake(&mut self, bumps: &UnstakeBumps) -> Result<()> {
+impl<'info> ClaimRewards<'info> {
+    pub fn claim_rewards(&mut self, bumps: &ClaimRewardsBumps) -> Result<()> {
         
         // Verify NFT owner and update authority
         let base_asset = BaseAssetV1::try_from(&self.nft.to_account_info())?;
@@ -82,18 +82,10 @@ impl<'info> Unstake<'info> {
             }
             Ok((_, attributes, _)) => attributes,
         };
-        let fetched_collection_attribute_list = match fetch_plugin::<BaseCollectionV1, Attributes>(&self.collection.to_account_info(), PluginType::Attributes) {
-            Err(_) => {
-                return Err(StakingError::NoCollection.into());
-            }
-            Ok((_, attributes, _)) => attributes,
-        };
 
         // Extract and validate staking attributes
         let mut attribute_list: Vec<Attribute> = Vec::with_capacity(fetched_attribute_list.attribute_list.len());
-        let mut collection_attribute_list: Vec<Attribute> = Vec::with_capacity(fetched_collection_attribute_list.attribute_list.len());
         let mut staked_value: Option<&str> = None;
-        let mut total_staked_value:u64 = 0;
         let mut staked_at_value: Option<&str> = None;
         
         for attribute in &fetched_attribute_list.attribute_list {
@@ -102,34 +94,16 @@ impl<'info> Unstake<'info> {
                     staked_value = Some(&attribute.value);
                     attribute_list.push(Attribute { 
                         key: "staked".to_string(), 
-                        value: "false".to_string() 
+                        value: "true".to_string() 
                     });
                 }
                 "staked_at" => {
                     staked_at_value = Some(&attribute.value);
                     attribute_list.push(Attribute { 
                         key: "staked_at".to_string(), 
-                        value: "0".to_string() 
+                        value: current_timestamp.to_string() 
                     });
                 }
-                _ => {
-                    attribute_list.push(attribute.clone());
-                }
-            }
-        }
-        for attribute in &fetched_collection_attribute_list.attribute_list {
-            match attribute.key.as_str() {
-                "total_staked" => {
-
-                    total_staked_value= attribute.value.parse::<u64>().unwrap_or(0);
-                    let incremented = total_staked_value.checked_sub(1).unwrap_or(total_staked_value);
-                                          
-                    attribute_list.push(Attribute { 
-                        key: "total_staked".to_string(), 
-                        value: incremented.to_string() 
-                    });
-                }
-                
                 _ => {
                     attribute_list.push(attribute.clone());
                 }
@@ -137,7 +111,6 @@ impl<'info> Unstake<'info> {
         }
 
         require!(staked_value == Some("true"), StakingError::NotStaked);
-        require!(total_staked_value >0, StakingError::NoCollection);
         
         let staked_at_timestamp = staked_at_value
             .ok_or(StakingError::InvalidTimestamp)?
@@ -165,26 +138,7 @@ impl<'info> Unstake<'info> {
             .system_program(&self.system_program.to_account_info())
             .plugin(Plugin::Attributes( Attributes { attribute_list }))
             .invoke_signed(&[signer_seeds])?;
-        
-        // Unfreeze the NFT (Thaw the asset)
-        UpdatePluginV1CpiBuilder::new(&self.mpl_core_program.to_account_info())
-            .asset(&self.nft.to_account_info())
-            .collection(Some(&self.collection.to_account_info()))
-            .payer(&self.user.to_account_info())
-            .authority(Some(&self.update_authority.to_account_info()))
-            .system_program(&self.system_program.to_account_info())
-            .plugin(Plugin::FreezeDelegate(FreezeDelegate { frozen: false }))
-            .invoke_signed(&[signer_seeds])?;
-        
-        //decreste the total_staked
-        // 
-        UpdateCollectionPluginV1CpiBuilder::new(&self.mpl_core_program.to_account_info())
-            .collection(&self.collection.to_account_info())
-            .payer(&self.user.to_account_info())
-            .authority(Some(&self.update_authority.to_account_info()))
-            .system_program(&self.system_program.to_account_info())
-            .plugin(Plugin::Attributes(Attributes { attribute_list:collection_attribute_list }))
-            .invoke_signed(&[signer_seeds])?;
+
 
         // Calculate rewards to the user
         let amount = (staked_time_days as u64)
