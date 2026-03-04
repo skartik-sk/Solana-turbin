@@ -1,8 +1,10 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenInterface};
 use mpl_core::accounts::BaseCollectionV1;
-use crate::state::Config;
+
+use crate::state::{Config, ExternalValidationResult, OracleValidation, Validation};
 use crate::errors::StakingError;
+use crate::utils::is_transferring_allowed;
 
 #[derive(Accounts)]
 pub struct InitConfig<'info> {
@@ -27,6 +29,23 @@ pub struct InitConfig<'info> {
     #[account(
         init,
         payer = admin,
+        space = Validation::size(),
+        seeds = [b"oracle"],
+        bump
+    )]
+    pub oracle: Account<'info, Validation>,
+    
+    #[account(
+        
+       mut,
+       seeds = [b"vault_for_reward", oracle.key().as_ref()],
+        bump
+    )]
+    pub vault_for_reward:SystemAccount<'info>,
+    
+    #[account(
+        init,
+        payer = admin,
         mint::decimals = 6,
         mint::authority = config,
         seeds = [b"rewards", config.key().as_ref()],
@@ -47,6 +66,40 @@ impl InitConfig<'_> {
             freeze_period, 
             rewards_bump: bumps.rewards_mint, 
             config_bump: bumps.config });
+        
+        
+        // Set the Oracle validation based on the time and if the US market is open
+           match is_transferring_allowed(Clock::get()?.unix_timestamp) {
+               true => {
+                   self.oracle.set_inner(
+                       Validation {
+                           validation: OracleValidation::V1 {
+                               transfer: ExternalValidationResult::Approved,
+                               create: ExternalValidationResult::Pass,
+                               update: ExternalValidationResult::Pass,
+                               burn: ExternalValidationResult::Pass,
+                           },
+                           bump: bumps.oracle,
+                           vault_bump: bumps.vault_for_reward,
+                       }
+                   );
+               }
+               false => {
+                   self.oracle.set_inner(
+                       Validation {
+                           validation: OracleValidation::V1 {
+                               transfer: ExternalValidationResult::Rejected,
+                               create: ExternalValidationResult::Pass,
+                               update: ExternalValidationResult::Pass,
+                               burn: ExternalValidationResult::Pass,
+                           },
+                           bump: bumps.oracle,
+                           vault_bump: bumps.vault_for_reward,
+                       }
+                   );
+               }
+           }
+        
         Ok(())
     }
 }

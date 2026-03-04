@@ -4,7 +4,7 @@ mod state;
 mod instructions;
 mod errors;
 use instructions::*;
-
+mod utils;
 declare_id!("HsptKegpGaqCjvrcbAQspZSHNPt8cs49ehbyYVXLur8J");
 
 #[program]
@@ -38,5 +38,11 @@ pub mod nft_staking_core {
     pub fn burn_staked_nft(ctx:Context<BurnStacked>)->Result<()>{
         ctx.accounts.burn_stacked(&ctx.bumps)
     }
+    pub fn transfer(ctx:Context<Transfer>)->Result<()>{
+        ctx.accounts.transfer(&ctx.bumps)
+    }
 
+    pub fn update_oracle(ctx:Context<UpdateOracle>)->Result<()>{
+        ctx.accounts.update_oracle()
+    }
 }

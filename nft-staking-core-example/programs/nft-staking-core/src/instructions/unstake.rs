@@ -123,15 +123,15 @@ impl<'info> Unstake<'info> {
 
                     total_staked_value= attribute.value.parse::<u64>().unwrap_or(0);
                     let incremented = total_staked_value.checked_sub(1).unwrap_or(total_staked_value);
-                                          
-                    attribute_list.push(Attribute { 
-                        key: "total_staked".to_string(), 
-                        value: incremented.to_string() 
+
+                    collection_attribute_list.push(Attribute {
+                        key: "total_staked".to_string(),
+                        value: incremented.to_string()
                     });
                 }
-                
+
                 _ => {
-                    attribute_list.push(attribute.clone());
+                    collection_attribute_list.push(attribute.clone());
                 }
             }
         }

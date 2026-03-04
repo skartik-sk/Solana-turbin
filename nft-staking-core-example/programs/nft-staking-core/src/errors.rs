@@ -19,4 +19,6 @@ pub enum StakingError {
     
     #[msg("Collection do not staked.")]
     NoCollection,
+    #[msg("Update already Done.")]
+    AlreadyUpdated,
 }

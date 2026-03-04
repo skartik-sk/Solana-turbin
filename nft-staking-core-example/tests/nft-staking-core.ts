@@ -35,7 +35,14 @@ describe("nft-staking-core", () => {
   // Generate a keypair for the nft to be burned (for burn tests)
   const nftToBurnKeypair = anchor.web3.Keypair.generate();
 
+  // Generate a keypair for transfer tests
+  const nftTransferKeypair = anchor.web3.Keypair.generate();
 
+const oracle_plugin_id = anchor.web3.PublicKey.findProgramAddressSync(
+  [Buffer.from("oracle")],
+  program.programId
+)[0];
+console.log("oracle_plugin_id : ", oracle_plugin_id)
 
   // Find the config account (PDA)
   const config = anchor.web3.PublicKey.findProgramAddressSync(
@@ -57,6 +64,7 @@ describe("nft-staking-core", () => {
       payer: provider.wallet.publicKey,
       collection: collectionKeypair.publicKey,
       updateAuthority,
+      oracle: oracle_plugin_id,
       systemProgram: SystemProgram.programId,
       mplCoreProgram: MPL_CORE_PROGRAM_ID,
     })
@@ -435,6 +443,84 @@ describe("nft-staking-core", () => {
     const expectedBonusRewards = expectedNormalRewards * 1.1;
     console.log("Expected normal rewards:", expectedNormalRewards);
     console.log("Expected with 1.1x bonus:", expectedBonusRewards);
+  });
+
+  // ============================================
+  // ORACLE PLUGIN TESTS
+  // ============================================
+
+  it("Mint NFT for transfer tests", async () => {
+    const nftName = "Test NFT for Transfer";
+    const nftUri = "https://example.com/nft-transfer";
+    const tx = await program.methods.mintNft(nftName, nftUri)
+    .accountsPartial({
+      user: provider.wallet.publicKey,
+      nft: nftTransferKeypair.publicKey,
+      collection: collectionKeypair.publicKey,
+      updateAuthority,
+      systemProgram: SystemProgram.programId,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
+    })
+    .signers([nftTransferKeypair])
+    .rpc();
+    console.log("\nYour transaction signature", tx);
+    console.log("NFT for transfer tests:", nftTransferKeypair.publicKey.toBase58());
+  });
+
+  it("FAIL: Transfer NFT when Oracle is Rejected (outside market hours)", async () => {
+    const randomWallet = anchor.web3.Keypair.generate();
+
+    try {
+      await program.methods.transfer()
+      .accountsPartial({
+        user: provider.wallet.publicKey,
+        nextOwner: randomWallet.publicKey,
+        oracle: oracle_plugin_id,
+        nft: nftTransferKeypair.publicKey,
+        collection: collectionKeypair.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+      throw new Error("Should have failed - Oracle should reject transfer");
+    } catch (err) {
+      console.log("\nExpected error: Oracle rejected transfer (outside market hours)");
+    }
+  });
+
+  it("Update Oracle state", async () => {
+    const tx = await program.methods.updateOracle()
+    .accountsPartial({
+      signer: provider.wallet.publicKey,
+      payer: provider.wallet.publicKey,
+      oracle: oracle_plugin_id,
+      vaultForReward: anchor.web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("vault_for_reward"), oracle_plugin_id.toBuffer()],
+        program.programId
+      )[0],
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+    console.log("\nYour transaction signature", tx);
+    console.log("Oracle state updated");
+  });
+
+  it("Transfer NFT when Oracle is Approved (after update)", async () => {
+    const randomWallet = anchor.web3.Keypair.generate();
+
+    const tx = await program.methods.transfer()
+    .accountsPartial({
+      user: provider.wallet.publicKey,
+      nextOwner: randomWallet.publicKey,
+      oracle: oracle_plugin_id,
+      nft: nftTransferKeypair.publicKey,
+      collection: collectionKeypair.publicKey,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+    console.log("\nYour transaction signature", tx);
+    console.log("NFT transferred successfully (Oracle approved)");
   });
 
 });
