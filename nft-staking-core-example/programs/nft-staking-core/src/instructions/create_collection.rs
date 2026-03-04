@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
 use mpl_core::{
     ID as MPL_CORE_ID, instructions::{
-        AddCollectionExternalPluginAdapterV1CpiBuilder, AddExternalPluginAdapterV1CpiBuilder,
         CreateCollectionV2CpiBuilder,
     }, types::{
         Attribute, Attributes, ExternalCheckResult, ExternalPluginAdapterInitInfo, HookableLifecycleEvent, OracleInitInfo, Plugin, PluginAuthority, PluginAuthorityPair, ValidationResultsOffset
@@ -41,7 +40,7 @@ impl<'info> CreateCollection<'info> {
         ];
 
         // Derive the oracle PDA address (seeds: [b"oracle"])
-        let oracle_pda = Pubkey::find_program_address(&[b"oracle"], &crate::ID()).0;
+        let oracle_pda = Pubkey::find_program_address(&[b"oracle"], &crate::ID).0;
 
         // Create the collection with CPI builder
         CreateCollectionV2CpiBuilder::new(&self.mpl_core_program.to_account_info())

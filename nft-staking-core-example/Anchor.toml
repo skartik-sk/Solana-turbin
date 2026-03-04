@@ -12,7 +12,7 @@ nft_staking_core = "HsptKegpGaqCjvrcbAQspZSHNPt8cs49ehbyYVXLur8J"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

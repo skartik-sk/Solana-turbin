@@ -39,7 +39,7 @@ pub mod nft_staking_core {
         ctx.accounts.burn_stacked(&ctx.bumps)
     }
     pub fn transfer(ctx:Context<Transfer>)->Result<()>{
-        ctx.accounts.transfer(&ctx.bumps)
+        ctx.accounts.transfer()
     }
 
     pub fn update_oracle(ctx:Context<UpdateOracle>)->Result<()>{

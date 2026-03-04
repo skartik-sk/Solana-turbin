@@ -1,6 +1,6 @@
 // Constants
 const SECONDS_IN_AN_HOUR: i64 = 3600;
-const SECONDS_IN_A_MINUTE: i64 = 60;
+// const SECONDS_IN_A_MINUTE: i64 = 60;
 const SECONDS_IN_A_DAY: i64 = 86400;
 const MARKET_OPEN_TIME: i64 = 9 * SECONDS_IN_AN_HOUR ; // 9:00 UTC == 9:00 am
 const MARKET_CLOSE_TIME: i64 = 17 * SECONDS_IN_AN_HOUR; // 17:00 UTC == 5:00 pm

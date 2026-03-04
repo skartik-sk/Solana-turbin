@@ -1,6 +1,6 @@
 ---
-name: nft-staking-core
-id: nft-staking-core
+name: nft-staking-core-example
+id: nft-staking-core-example
 runbooks:
   - name: deployment
     description: Deploy programs
