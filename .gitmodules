@@ -1,0 +1,3 @@
+[submodule "accel-PortProtocol"]
+	path = accel-PortProtocol
+	url = https://github.com/Turbin3/accel-PortProtocol.git
